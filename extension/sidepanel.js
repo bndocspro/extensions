@@ -3,9 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const jsonBtn    = document.getElementById('btn-json');
     const aiBtn      = document.getElementById('btn-ai');
     const apiBtn     = document.getElementById('btn-api');
+    const quickBtn   = document.getElementById('btn-quick');
     const panelJson  = document.getElementById('panel-json');
     const panelAi    = document.getElementById('panel-ai');
     const panelApi   = document.getElementById('panel-api');
+    const panelQuick = document.getElementById('panel-quick');
     const jsonData   = document.getElementById('json-data');
     const examUrl    = document.getElementById('exam-url');
     const fetchBtn   = document.getElementById('fetch-btn');
@@ -59,20 +61,26 @@ document.addEventListener('DOMContentLoaded', () => {
         jsonBtn.classList.toggle('active', mode === 'json');
         aiBtn.classList.toggle('active',   mode === 'ai');
         apiBtn.classList.toggle('active',  mode === 'api');
+        if (quickBtn) quickBtn.classList.toggle('active', mode === 'quick');
+
         panelJson.classList.toggle('active', mode === 'json');
         panelAi.classList.toggle('active',   mode === 'ai');
         panelApi.classList.toggle('active',  mode === 'api');
+        if (panelQuick) panelQuick.classList.toggle('active', mode === 'quick');
+
         chrome.storage.local.set({ mode });
     }
 
     jsonBtn.addEventListener('click', () => setMode('json'));
     aiBtn.addEventListener('click',   () => setMode('ai'));
     apiBtn.addEventListener('click',  () => setMode('api'));
+    if (quickBtn) quickBtn.addEventListener('click', () => setMode('quick'));
 
     // ─── Show/Hide API Key ────────────────────────────────
     toggleKey.addEventListener('click', () => {
         const isHidden = apiKey.type === 'password';
         apiKey.type = isHidden ? 'text' : 'password';
+        toggleKey.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
     });
 
     // ─── Log Utility ─────────────────────────────────────
@@ -282,11 +290,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     const ICONS = {
-        spinner: `<svg class="status-icon spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`,
-        check:   `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>`,
-        x:       `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-        warn:    `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-        info:    `<svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+        spinner: `<i class="status-icon spinner bi bi-arrow-repeat"></i>`,
+        check:   `<i class="status-icon bi bi-check-circle-fill"></i>`,
+        x:       `<i class="status-icon bi bi-x-circle-fill"></i>`,
+        warn:    `<i class="status-icon bi bi-exclamation-triangle-fill"></i>`,
+        info:    `<i class="status-icon bi bi-info-circle-fill"></i>`
     };
 
     function setStatus(msg, state = '') {
@@ -317,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     startBtn.addEventListener('click', async () => {
         startBtn.disabled = true;
         stopBtn.disabled  = false;
-        startBtn.innerHTML = `<svg class="status-icon spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><span>Running...</span>`;
+        startBtn.innerHTML = `<i class="bi bi-arrow-repeat spinner"></i><span>Running...</span>`;
 
         setStatus('Connecting to tab...', 'running');
         addLog('Automation started', 'info');
@@ -380,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             startBtn.disabled = false;
             stopBtn.disabled  = true;
-            startBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5,3 19,12 5,21"/></svg><span>Start Automation</span>`;
+            startBtn.innerHTML = `<i class="bi bi-play-circle-fill"></i><span>Start Automation</span>`;
             progressWrap.classList.add('hidden');
         }
     });
@@ -405,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set loading state
         apiFetchBtn.disabled = true;
         apiFetchBtn.classList.add('loading');
-        apiFetchIcon.innerHTML = '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>';
+        apiFetchIcon.className = 'bi bi-arrow-repeat spinner';
         setStatus('Fetching & decoding exam API...', 'running');
         addLog('Running Chorcha API fetcher...', 'info');
 
@@ -511,30 +519,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             apiFetchBtn.disabled = false;
             apiFetchBtn.classList.remove('loading');
-            apiFetchIcon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
+            apiFetchIcon.className = 'bi bi-play-fill';
         }
     });
 
     // ─── Copy decoded JSON ────────────────────────────────
-    // Read directly from the visible code box — guarantees what you see = what you copy
     apiCopyBtn.addEventListener('click', () => {
         const text = apiResponseBox.textContent;
         if (!text) return;
         navigator.clipboard.writeText(text).then(() => {
             apiCopyBtn.classList.add('copied');
-            apiCopyBtn.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20,6 9,17 4,12"/>
-                </svg>
-                Copied!`;
+            apiCopyBtn.innerHTML = `<i class="bi bi-check2"></i> Copied!`;
             setTimeout(() => {
                 apiCopyBtn.classList.remove('copied');
-                apiCopyBtn.innerHTML = `
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
-                    Copy`;
+                apiCopyBtn.innerHTML = `<i class="bi bi-clipboard"></i>`;
             }, 2000);
         }).catch(() => {
             addLog('Clipboard write failed', 'err');
@@ -551,5 +549,21 @@ document.addEventListener('DOMContentLoaded', () => {
         apiPlaceholder.classList.remove('hidden');
         setStatus('Ready to automate', '');
         addLog('API response cleared', 'warn');
+    });
+
+    // ─── Listen for Quick Exam Data ───────────────────────────
+    chrome.runtime.onMessage.addListener((msg) => {
+        if (msg.action === 'QUICK_EXAM_DATA' && msg.data) {
+            const quickPlaceholder = document.getElementById('quick-placeholder');
+            const quickResponseWrap = document.getElementById('quick-response-wrap');
+            const quickResponseBox = document.getElementById('quick-response-box');
+            
+            if (quickPlaceholder && quickResponseWrap && quickResponseBox) {
+                quickPlaceholder.classList.add('hidden');
+                quickResponseWrap.classList.remove('hidden');
+                quickResponseBox.textContent = JSON.stringify(msg.data, null, 2);
+                addLog('Quick Exam answers intercepted!', 'ok');
+            }
+        }
     });
 });

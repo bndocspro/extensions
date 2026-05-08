@@ -5,9 +5,17 @@ let isStopped = false;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'START_AUTOMATION') {
         isStopped = false; // reset on each start
-        startAutomation(request.config)
-            .then(result => sendResponse(result))
-            .catch(err  => sendResponse({ status: 'error', message: err.message }));
+        
+        // Use quick solver if in quick mode, answers exist, and single question layout is present
+        if (request.config.mode === 'quick' && window.quickExamAnswers && document.querySelector('div.grid.gap-2')) {
+            startQuickPracticeSolver(window.quickExamAnswers)
+                .then(() => sendResponse({ status: 'done', answered: Object.keys(window.quickExamAnswers).length, total: Object.keys(window.quickExamAnswers).length, skipped: 0 }))
+                .catch(err => sendResponse({ status: 'error', message: err.message }));
+        } else {
+            startAutomation(request.config)
+                .then(result => sendResponse(result))
+                .catch(err  => sendResponse({ status: 'error', message: err.message }));
+        }
         return true; // keep channel open for async
     }
 
@@ -24,34 +32,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// ─── Battle Solver Injection ─────────────────────────────
+// ─── Battle and Quick Exam Solver Injection ─────────────────────────────
 const injectScript = document.createElement('script');
-injectScript.textContent = `
-    const originalFetch = window.fetch;
-    window.fetch = async function(...args) {
-        const url = args[0];
-        if (typeof url === 'string' && url.includes('/battle/create')) {
-            try {
-                if (args[1] && args[1].body) {
-                    const payload = JSON.parse(args[1].body);
-                    if (payload.druto_id) {
-                        window.postMessage({ type: 'BATTLE_CREATED', battleId: payload.druto_id }, '*');
-                    }
-                }
-            } catch(e) { console.error('Battle intercept parse error', e); }
-        }
-        return originalFetch.apply(this, args);
-    };
-`;
+injectScript.src = chrome.runtime.getURL('inject.js');
+injectScript.onload = function() {
+    this.remove();
+};
 document.documentElement.appendChild(injectScript);
-injectScript.remove();
 
 // ─── Decode utilities ────────────────────────────────────
 function decodeValue(encodedStr, key) {
     if (!key) return encodedStr;
     let decoded = '';
     for (let i = 0; i < encodedStr.length; i++) {
-        decoded += String.fromCharCode(encodedStr.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        const cp = encodedStr.charCodeAt(i);
+        const kc = key.charCodeAt(i % key.length);
+        decoded += String.fromCharCode((cp - kc + 65536) % 65536);
     }
     return decoded;
 }
@@ -67,33 +63,84 @@ function decodeObject(obj, key) {
     return obj;
 }
 
-// ─── Battle answer cache ─────────────────────────────────
+// ─── Battle and Quick Exam answer cache ─────────────────────────────────
 window.battleAnswers = null;
+window.quickExamAnswers = null;
 
 window.addEventListener('message', async (event) => {
     if (event.source !== window || !event.data) return;
-    if (event.data.type !== 'BATTLE_CREATED') return;
+    
+    if (event.data.type === 'BATTLE_CREATED') {
+        const battleId = event.data.battleId;
+        console.log('Quiz Auto Pro: Intercepted Battle ID:', battleId);
 
-    const battleId = event.data.battleId;
-    console.log('Quiz Auto Pro: Intercepted Battle ID:', battleId);
+        try {
+            const response = await fetch('https://mujib.chorcha.net/battle/exam-config', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Chorcha-Mode': 'api',
+                    'X-Chorcha-Platform': 'web'
+                },
+                body: JSON.stringify({ druto_id: battleId })
+            });
+            const chorchaId = response.headers.get('x-chorcha-id');
+            const data = await response.json();
+            window.battleAnswers = decodeObject(data, chorchaId);
+            console.log('Quiz Auto Pro: Battle config loaded.', window.battleAnswers);
+        } catch(e) {
+            console.error('Quiz Auto Pro: Failed to fetch battle config:', e);
+        }
+    }
 
-    try {
-        const response = await fetch('https://mujib.chorcha.net/battle/exam-config', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Chorcha-Mode': 'api',
-                'X-Chorcha-Platform': 'web'
-            },
-            body: JSON.stringify({ druto_id: battleId })
-        });
-        const chorchaId = response.headers.get('x-chorcha-id');
-        const data = await response.json();
-        window.battleAnswers = decodeObject(data, chorchaId);
-        console.log('Quiz Auto Pro: Battle config loaded.', window.battleAnswers);
-    } catch(e) {
-        console.error('Quiz Auto Pro: Failed to fetch battle config:', e);
+    if (event.data.type === 'QUICK_EXAM_INTERCEPTED') {
+        const { data, chorchaId } = event.data;
+        const decodedData = decodeObject(data, chorchaId);
+        
+        console.log('Quiz Auto Pro: Quick Exam config loaded.', decodedData);
+        
+        try {
+            // Support both questions array and answers array based on API response
+            const items =
+                decodedData?.data?.answers         ||
+                decodedData?.answers               ||
+                decodedData?.data?.exam?.questions ||
+                decodedData?.exam?.questions       ||
+                decodedData?.data?.questions       ||
+                decodedData?.questions;
+
+            if (Array.isArray(items) && items.length > 0) {
+                const answers = {};
+                items.forEach((item, idx) => {
+                    const serial = String(idx + 1);
+                    const answerVal = item?.answer ?? item?.q?.answer;
+
+                    if (answerVal === undefined || answerVal === null) return;
+
+                    if (typeof answerVal === 'string' && /^[A-Ea-e]$/.test(answerVal.trim())) {
+                        answers[serial] = answerVal.trim().toUpperCase();
+                    } else if (typeof answerVal === 'number' && answerVal >= 0 && answerVal <= 4) {
+                        answers[serial] = ['A','B','C','D','E'][answerVal];
+                    } else if (typeof answerVal === 'string' && /^[0-4]$/.test(answerVal)) {
+                        answers[serial] = ['A','B','C','D','E'][parseInt(answerVal)];
+                    } else {
+                        answers[serial] = String(answerVal).toUpperCase();
+                    }
+                });
+                
+                window.quickExamAnswers = answers;
+                console.log('Quiz Auto Pro: Quick Exam extracted answers map:', window.quickExamAnswers);
+                
+                // Send the answers map to the sidepanel/background immediately
+                chrome.runtime.sendMessage({
+                    action: 'QUICK_EXAM_DATA',
+                    data: window.quickExamAnswers
+                }).catch(() => {});
+            }
+        } catch (e) {
+            console.error('Quiz Auto Pro: Failed to parse quick exam answers', e);
+        }
     }
 });
 
@@ -255,7 +302,22 @@ async function processQuestion(container, originalIndex, config) {
 
     let answerLabel = null;
 
-    if (config.mode === 'json') {
+    // ── Fast-path: Quick Exam answer cache ───────────────
+    if (window.quickExamAnswers) {
+        if (window.quickExamAnswers[qNumber]) {
+            answerLabel = window.quickExamAnswers[qNumber];
+        } else {
+            const engNum = qNumber.replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d).toString());
+            if (window.quickExamAnswers[engNum]) {
+                answerLabel = window.quickExamAnswers[engNum];
+            } else if (window.quickExamAnswers[(originalIndex + 1).toString()]) {
+                answerLabel = window.quickExamAnswers[(originalIndex + 1).toString()];
+            }
+        }
+    }
+
+    if (!answerLabel) {
+        if (config.mode === 'json') {
         let answersData = JSON.parse(config.jsonData);
 
         // Normalize: handle flat object, single-element array, or array-of-single-key-objects
@@ -281,9 +343,10 @@ async function processQuestion(container, originalIndex, config) {
             answerLabel = answersData[(originalIndex + 1).toString()];
         }
 
-    } else if (config.mode === 'ai') {
-        if (!config.apiKey) throw new Error('API Key is missing for AI Mode.');
-        answerLabel = await getAiAnswer(qText, options, config);
+        } else if (config.mode === 'ai') {
+            if (!config.apiKey) throw new Error('API Key is missing for AI Mode.');
+            answerLabel = await getAiAnswer(qText, options, config);
+        }
     }
 
     if (answerLabel) {
@@ -395,3 +458,81 @@ async function fetchExamAnswers(apiUrl) {
     return answers;
 }
 
+// ─── Quick Practice Exam Automation ─────────────────────────────
+async function startQuickPracticeSolver(answersMap) {
+    console.log('Quiz Auto Pro: Starting Quick Practice Automation...');
+    let currentQuestionSerial = 1;
+    let maxQuestions = Object.keys(answersMap).length;
+
+    while (currentQuestionSerial <= maxQuestions) {
+        if (isStopped) {
+            console.log('Quiz Auto Pro: Quick Practice Automation Stopped.');
+            break;
+        }
+
+        const answerLabel = answersMap[String(currentQuestionSerial)];
+        if (!answerLabel) {
+            console.warn(`No answer found for Q${currentQuestionSerial}`);
+            currentQuestionSerial++;
+            continue;
+        }
+
+        // Wait for question options to appear
+        let retries = 2; // Wait up to 15 seconds
+        let options = [];
+        while (retries > 0 && !isStopped) {
+            const grid = document.querySelector('div.grid.gap-2');
+            if (grid) {
+                options = grid.querySelectorAll('button');
+            }
+            if (!options || options.length === 0) {
+                // Fallback selector
+                options = document.querySelectorAll('button.flex.w-full.gap-2.rounded-xl.py-3.px-4.items-center.border');
+            }
+            
+            if (options.length > 0) break;
+            await sleep(500);
+            retries--;
+        }
+
+        if (options.length === 0) {
+            console.error('Options not found, stopping quick practice automation.');
+            break;
+        }
+
+        // Map answer letter to option index
+        const letterToIndex = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4 };
+        const index = letterToIndex[answerLabel.toUpperCase()];
+        
+        if (index !== undefined && options[index]) {
+            ['mousedown','mouseup','click'].forEach(type =>
+                options[index].dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
+            );
+            console.log(`Quiz Auto Pro: Clicked option ${answerLabel} for Q${currentQuestionSerial}`);
+        } else {
+            console.warn(`Quiz Auto Pro: Option ${answerLabel} not found in DOM for Q${currentQuestionSerial}`);
+        }
+
+        await sleep(500); // Wait for the Next button to become active
+
+        // Click Next or Submit
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const nextBtn = buttons.find(b => b.innerText.includes('পরের প্রশ্ন') || b.innerText.includes('শেষ করুন') || b.innerText.includes('Submit'));
+
+        if (nextBtn) {
+            ['mousedown','mouseup','click'].forEach(type =>
+                nextBtn.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
+            );
+            
+            if (nextBtn.innerText.includes('শেষ করুন') || nextBtn.innerText.includes('Submit')) {
+                console.log('Quiz Auto Pro: Finished quick practice exam.');
+                break;
+            }
+        } else {
+            console.warn('Quiz Auto Pro: Next button not found!');
+        }
+
+        currentQuestionSerial++;
+        await sleep(1000); // Wait for the next question to render
+    }
+}
