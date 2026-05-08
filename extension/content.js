@@ -133,10 +133,12 @@ window.addEventListener('message', async (event) => {
                 console.log('Quiz Auto Pro: Quick Exam extracted answers map:', window.quickExamAnswers);
                 
                 // Send the answers map to the sidepanel/background immediately
-                chrome.runtime.sendMessage({
-                    action: 'QUICK_EXAM_DATA',
-                    data: window.quickExamAnswers
-                }).catch(() => {});
+                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                    chrome.runtime.sendMessage({
+                        action: 'QUICK_EXAM_DATA',
+                        data: window.quickExamAnswers
+                    }).catch(() => {});
+                }
             }
         } catch (e) {
             console.error('Quiz Auto Pro: Failed to parse quick exam answers', e);
