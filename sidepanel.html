@@ -206,13 +206,35 @@
 
       <!-- ── Battle Mode ── -->
       <section id="panel-battle" class="panel">
-        <div class="m3-card elevated">
-          <div class="card-header">
-            <span class="material-symbols-rounded card-header-icon" style="color: #f59e0b;">swords</span>
-            <h3 class="card-title">Battle Automation</h3>
+
+        <!-- Intercepted answers box -->
+        <div id="battle-response-wrap" class="m3-code-card hidden">
+          <div class="code-card-header">
+            <div class="code-card-title">
+              <span class="material-symbols-rounded">terminal</span>
+              <span>Intercepted Battle Config</span>
+            </div>
+            <div class="code-card-actions">
+              <button id="battle-copy-btn" class="icon-btn-sm" title="Copy JSON">
+                <span class="material-symbols-rounded">content_copy</span>
+              </button>
+              <button id="battle-clear-btn" class="icon-btn-sm danger" title="Clear response">
+                <span class="material-symbols-rounded">delete</span>
+              </button>
+            </div>
           </div>
-          <span class="field-support">Navigate to a chorcha.net battle exam and press <strong>Start Automation</strong> below. The extension will automatically fetch the true answers and instantly select them when the question loads.</span>
+          <pre id="battle-response-box" class="code-output"></pre>
         </div>
+
+        <!-- Empty state -->
+        <div id="battle-placeholder" class="empty-state">
+          <div class="empty-icon-wrap" style="background: rgba(245,158,11,0.12);">
+            <span class="material-symbols-rounded" style="color:#f59e0b;">swords</span>
+          </div>
+          <h4>Waiting for Battle Exam</h4>
+          <p>Navigate to a chorcha.net Battle exam and start it. The config will be intercepted and shown here automatically.</p>
+        </div>
+
       </section>
 
       <!-- ── Quick Exam Mode ── -->

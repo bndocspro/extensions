@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentMode = 'json';
     let lastApiJson  = '';   // cached decoded JSON string
+    let battleInterceptedAnswers = null; // answers captured from Battle interception
 
     // ─── Persist / Restore Settings ──────────────────────
     chrome.storage.local.get(['mode', 'jsonData', 'apiKey', 'modelName', 'examUrl'], (res) => {
@@ -144,6 +145,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     quickCopyBtn.innerHTML = `<span class="material-symbols-rounded">content_copy</span>`;
                 }, 1500);
             });
+        });
+    }
+
+    // ─── Battle Panel — Copy & Clear ─────────────────────
+    const battleCopyBtn  = document.getElementById('battle-copy-btn');
+    const battleClearBtn = document.getElementById('battle-clear-btn');
+    const battleResponseWrap = document.getElementById('battle-response-wrap');
+    const battleResponseBox  = document.getElementById('battle-response-box');
+    const battlePlaceholder  = document.getElementById('battle-placeholder');
+
+    if (battleCopyBtn) {
+        battleCopyBtn.addEventListener('click', () => {
+            if (!battleResponseBox || !battleResponseBox.textContent.trim()) return;
+            navigator.clipboard.writeText(battleResponseBox.textContent).then(() => {
+                battleCopyBtn.innerHTML = `<span class="material-symbols-rounded">check</span>`;
+                setTimeout(() => {
+                    battleCopyBtn.innerHTML = `<span class="material-symbols-rounded">content_copy</span>`;
+                }, 1500);
+            });
+        });
+    }
+
+    if (battleClearBtn) {
+        battleClearBtn.addEventListener('click', () => {
+            if (battleResponseBox)  battleResponseBox.textContent = '';
+            if (battleResponseWrap) battleResponseWrap.classList.add('hidden');
+            if (battlePlaceholder)  battlePlaceholder.classList.remove('hidden');
+            battleInterceptedAnswers = null;
+            addLog('Battle config cleared', 'warn');
         });
     }
 
@@ -630,29 +660,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (msg.action === 'LOG') {
             addLog(msg.text, msg.level || 'default');
         }
+
         if (msg.action === 'BATTLE_STOPPED') {
             const startBtn = document.getElementById('start-btn');
-            const stopBtn = document.getElementById('stop-btn');
+            const stopBtn  = document.getElementById('stop-btn');
             if (startBtn && stopBtn) {
                 startBtn.disabled = false;
-                stopBtn.disabled = true;
+                stopBtn.disabled  = true;
                 startBtn.innerHTML = `<span class="material-symbols-rounded">rocket_launch</span><span>Start Automation</span>`;
                 setStatus('Battle automation finished.', 'success');
             }
         }
+
+        if (msg.action === 'BATTLE_CONFIG_LOADED' && msg.data) {
+            battleInterceptedAnswers = msg.data;
+            if (battleResponseWrap && battleResponseBox && battlePlaceholder) {
+                battlePlaceholder.classList.add('hidden');
+                battleResponseWrap.classList.remove('hidden');
+                battleResponseBox.textContent = JSON.stringify(msg.data, null, 2);
+            }
+            addLog(`Battle config intercepted — ${Object.keys(msg.data).length} answers loaded`, 'ok');
+        }
+
         if (msg.action === 'QUICK_EXAM_DATA' && msg.data) {
             const quickResponseWrap = document.getElementById('quick-response-wrap');
-            const quickResponseBox = document.getElementById('quick-response-box');
-            
+            const quickResponseBox  = document.getElementById('quick-response-box');
+            const quickPlaceholder  = document.getElementById('quick-placeholder');
+
             if (quickResponseWrap && quickResponseBox) {
                 quickResponseWrap.classList.remove('hidden');
                 quickResponseBox.textContent = JSON.stringify(msg.data, null, 2);
+                if (quickPlaceholder) quickPlaceholder.classList.add('hidden');
                 addLog('Quick Exam answers intercepted!', 'ok');
             }
-
-            // Auto-load into battle intercepted answers
-            battleInterceptedAnswers = msg.data;
         }
-
     });
 });
