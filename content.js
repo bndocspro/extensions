@@ -5,7 +5,7 @@ let isStopped = false;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'START_AUTOMATION') {
         isStopped = false; // reset on each start
-        
+
         // Use quick solver if in quick mode, answers exist, and single question layout is present
         if (request.config.mode === 'quick' && window.quickExamAnswers && document.querySelector('div.grid.gap-2')) {
             startQuickPracticeSolver(window.quickExamAnswers)
@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
             startAutomation(request.config)
                 .then(result => sendResponse(result))
-                .catch(err  => sendResponse({ status: 'error', message: err.message }));
+                .catch(err => sendResponse({ status: 'error', message: err.message }));
         }
         return true; // keep channel open for async
     }
@@ -27,7 +27,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'FETCH_EXAM_ANSWERS') {
         fetchExamAnswers(request.apiUrl)
             .then(answers => sendResponse({ status: 'ok', answers }))
-            .catch(err   => sendResponse({ status: 'error', message: err.message }));
+            .catch(err => sendResponse({ status: 'error', message: err.message }));
         return true; // async
     }
 });
@@ -35,7 +35,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ─── Battle and Quick Exam Solver Injection ─────────────────────────────
 const injectScript = document.createElement('script');
 injectScript.src = chrome.runtime.getURL('inject.js');
-injectScript.onload = function() {
+injectScript.onload = function () {
     this.remove();
 };
 document.documentElement.appendChild(injectScript);
@@ -53,8 +53,8 @@ function decodeValue(encodedStr, key) {
 }
 
 function decodeObject(obj, key) {
-    if (typeof obj === 'string')  return decodeValue(obj, key);
-    if (Array.isArray(obj))       return obj.map(item => decodeObject(item, key));
+    if (typeof obj === 'string') return decodeValue(obj, key);
+    if (Array.isArray(obj)) return obj.map(item => decodeObject(item, key));
     if (typeof obj === 'object' && obj !== null) {
         const result = {};
         for (const k in obj) result[k] = decodeObject(obj[k], key);
@@ -66,12 +66,16 @@ function decodeObject(obj, key) {
 // ─── Battle and Quick Exam answer cache ─────────────────────────────────
 window.battleAnswers = null;
 window.quickExamAnswers = null;
+window.currentBattleId = null;
+
 
 window.addEventListener('message', async (event) => {
     if (event.source !== window || !event.data) return;
-    
+
     if (event.data.type === 'BATTLE_CREATED') {
         const battleId = event.data.battleId;
+        window.currentBattleId = battleId;
+
         console.log('Quiz Auto Pro: Intercepted Battle ID:', battleId);
 
         try {
@@ -89,7 +93,7 @@ window.addEventListener('message', async (event) => {
             const data = await response.json();
             window.battleAnswers = decodeObject(data, chorchaId);
             console.log('Quiz Auto Pro: Battle config loaded.', window.battleAnswers);
-        } catch(e) {
+        } catch (e) {
             console.error('Quiz Auto Pro: Failed to fetch battle config:', e);
         }
     }
@@ -97,17 +101,17 @@ window.addEventListener('message', async (event) => {
     if (event.data.type === 'QUICK_EXAM_INTERCEPTED') {
         const { data, chorchaId } = event.data;
         const decodedData = decodeObject(data, chorchaId);
-        
+
         console.log('Quiz Auto Pro: Quick Exam config loaded.', decodedData);
-        
+
         try {
             // Support both questions array and answers array based on API response
             const items =
-                decodedData?.data?.answers         ||
-                decodedData?.answers               ||
+                decodedData?.data?.answers ||
+                decodedData?.answers ||
                 decodedData?.data?.exam?.questions ||
-                decodedData?.exam?.questions       ||
-                decodedData?.data?.questions       ||
+                decodedData?.exam?.questions ||
+                decodedData?.data?.questions ||
                 decodedData?.questions;
 
             if (Array.isArray(items) && items.length > 0) {
@@ -121,23 +125,23 @@ window.addEventListener('message', async (event) => {
                     if (typeof answerVal === 'string' && /^[A-Ea-e]$/.test(answerVal.trim())) {
                         answers[serial] = answerVal.trim().toUpperCase();
                     } else if (typeof answerVal === 'number' && answerVal >= 0 && answerVal <= 4) {
-                        answers[serial] = ['A','B','C','D','E'][answerVal];
+                        answers[serial] = ['A', 'B', 'C', 'D', 'E'][answerVal];
                     } else if (typeof answerVal === 'string' && /^[0-4]$/.test(answerVal)) {
-                        answers[serial] = ['A','B','C','D','E'][parseInt(answerVal)];
+                        answers[serial] = ['A', 'B', 'C', 'D', 'E'][parseInt(answerVal)];
                     } else {
                         answers[serial] = String(answerVal).toUpperCase();
                     }
                 });
-                
+
                 window.quickExamAnswers = answers;
                 console.log('Quiz Auto Pro: Quick Exam extracted answers map:', window.quickExamAnswers);
-                
+
                 // Send the answers map to the sidepanel/background immediately
                 if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
                     chrome.runtime.sendMessage({
                         action: 'QUICK_EXAM_DATA',
                         data: window.quickExamAnswers
-                    }).catch(() => {});
+                    }).catch(() => { });
                 }
             }
         } catch (e) {
@@ -152,11 +156,11 @@ function sleep(ms) {
 }
 
 function sendLog(text, level = 'default') {
-    chrome.runtime.sendMessage({ action: 'LOG', text, level }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'LOG', text, level }).catch(() => { });
 }
 
 function sendProgress(done, total) {
-    chrome.runtime.sendMessage({ action: 'PROGRESS_UPDATE', done, total }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'PROGRESS_UPDATE', done, total }).catch(() => { });
 }
 
 // ─── Main Automation ─────────────────────────────────────
@@ -222,7 +226,7 @@ async function startAutomation(config) {
         chrome.runtime.sendMessage({
             action: 'RECHECK_START',
             count: failedContainers.length
-        }).catch(() => {});
+        }).catch(() => { });
 
         console.log(`Quiz Auto Pro: Re-checking ${failedContainers.length} missed question(s)...`);
         await sleep(400);
@@ -242,7 +246,7 @@ async function startAutomation(config) {
                 answeredCount++;
                 sendProgress(answeredCount, total);
                 sendLog(`Re-check OK: Q${idx + 1}`, 'ok');
-            } catch(e) {
+            } catch (e) {
                 console.error('Re-check failed for Q' + (idx + 1) + ':', e);
                 sendLog(`Re-check failed: Q${idx + 1}`, 'err');
                 stillFailed.push(container);
@@ -270,7 +274,7 @@ async function processQuestion(container, originalIndex, config) {
     if (!qElement) throw new Error('Question text element not found');
 
     const qText = qElement.innerText.trim();
-    let qNumber  = (originalIndex + 1).toString();
+    let qNumber = (originalIndex + 1).toString();
     const numMatch = qText.match(/^(\d+|[১-৯০]+)/);
     if (numMatch) qNumber = numMatch[1];
 
@@ -280,11 +284,11 @@ async function processQuestion(container, originalIndex, config) {
     const optionMap = { 'ক': 'A', 'খ': 'B', 'গ': 'C', 'ঘ': 'D' };
 
     optionBtns.forEach((btn, index) => {
-        const span  = btn.querySelector('span');
-        let letter  = span ? span.innerText.trim() : '';
+        const span = btn.querySelector('span');
+        let letter = span ? span.innerText.trim() : '';
         letter = letter.replace(/[\.)\s]/g, '');
         const label = optionMap[letter] || String.fromCharCode(65 + index);
-        let text    = btn.innerText;
+        let text = btn.innerText;
         if (span) text = text.replace(span.innerText, '').trim();
         options.push({ label, text, element: btn });
     });
@@ -320,30 +324,30 @@ async function processQuestion(container, originalIndex, config) {
 
     if (!answerLabel) {
         if (config.mode === 'json') {
-        let answersData = JSON.parse(config.jsonData);
+            let answersData = JSON.parse(config.jsonData);
 
-        // Normalize: handle flat object, single-element array, or array-of-single-key-objects
-        if (Array.isArray(answersData)) {
-            if (answersData.length === 0) {
-                answersData = {};
-            } else if (answersData.length === 1) {
-                // [{"1":"C","2":"A",...}] or [{"1":"C"}]
-                answersData = answersData[0];
-            } else {
-                // [{"1":"C"},{"2":"A"},{"3":"B"},...] — merge all into one flat map
-                answersData = Object.assign({}, ...answersData);
+            // Normalize: handle flat object, single-element array, or array-of-single-key-objects
+            if (Array.isArray(answersData)) {
+                if (answersData.length === 0) {
+                    answersData = {};
+                } else if (answersData.length === 1) {
+                    // [{"1":"C","2":"A",...}] or [{"1":"C"}]
+                    answersData = answersData[0];
+                } else {
+                    // [{"1":"C"},{"2":"A"},{"3":"B"},...] — merge all into one flat map
+                    answersData = Object.assign({}, ...answersData);
+                }
             }
-        }
 
-        answerLabel = answersData[qNumber];
+            answerLabel = answersData[qNumber];
 
-        if (!answerLabel) {
-            const engNum = qNumber.replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d).toString());
-            answerLabel = answersData[engNum];
-        }
-        if (!answerLabel) {
-            answerLabel = answersData[(originalIndex + 1).toString()];
-        }
+            if (!answerLabel) {
+                const engNum = qNumber.replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d).toString());
+                answerLabel = answersData[engNum];
+            }
+            if (!answerLabel) {
+                answerLabel = answersData[(originalIndex + 1).toString()];
+            }
 
         } else if (config.mode === 'ai') {
             if (!config.apiKey) throw new Error('API Key is missing for AI Mode.');
@@ -355,7 +359,7 @@ async function processQuestion(container, originalIndex, config) {
         const target = options.find(o => o.label.toUpperCase() === answerLabel.toUpperCase());
         if (target) {
             // Use dispatchEvent (bubbles) for React/Next.js — bare .click() is often ignored
-            ['mousedown','mouseup','click'].forEach(type =>
+            ['mousedown', 'mouseup', 'click'].forEach(type =>
                 target.element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
             );
             console.log(`Quiz Auto Pro: Q${qNumber} → ${answerLabel}`);
@@ -380,14 +384,14 @@ async function submitQuiz() {
 function getAiAnswer(question, options, config) {
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({
-            action:   'GET_AI_ANSWER',
+            action: 'GET_AI_ANSWER',
             question: question,
-            options:  options.map(o => `${o.label}: ${o.text}`).join('\n'),
-            config:   config
+            options: options.map(o => `${o.label}: ${o.text}`).join('\n'),
+            config: config
         }, response => {
-            if (!response)          reject(new Error('Background script did not respond.'));
+            if (!response) reject(new Error('Background script did not respond.'));
             else if (response.error) reject(new Error(response.error));
-            else                    resolve(response.answer);
+            else resolve(response.answer);
         });
     });
 }
@@ -417,8 +421,8 @@ async function fetchExamAnswers(apiUrl) {
     // Try all known paths in order
     const questions =
         data?.data?.exam?.questions ||
-        data?.exam?.questions       ||
-        data?.data?.questions       ||
+        data?.exam?.questions ||
+        data?.data?.questions ||
         data?.questions;
 
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -444,11 +448,11 @@ async function fetchExamAnswers(apiUrl) {
         }
         // If answer is a numeric index (0-4), convert to letter
         else if (typeof answerVal === 'number' && answerVal >= 0 && answerVal <= 4) {
-            answers[serial] = ['A','B','C','D','E'][answerVal];
+            answers[serial] = ['A', 'B', 'C', 'D', 'E'][answerVal];
         }
         // If answer is a string digit "0"-"4"
         else if (typeof answerVal === 'string' && /^[0-4]$/.test(answerVal)) {
-            answers[serial] = ['A','B','C','D','E'][parseInt(answerVal)];
+            answers[serial] = ['A', 'B', 'C', 'D', 'E'][parseInt(answerVal)];
         }
         // Otherwise keep the raw value
         else {
@@ -517,9 +521,9 @@ async function startQuickPracticeSolver(answersMap) {
         // Map answer letter to option index
         const letterToIndex = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4 };
         const index = letterToIndex[answerLabel.toUpperCase()];
-        
+
         if (index !== undefined && options[index]) {
-            ['mousedown','mouseup','click'].forEach(type =>
+            ['mousedown', 'mouseup', 'click'].forEach(type =>
                 options[index].dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
             );
             console.log(`Quiz Auto Pro: Clicked option ${answerLabel} for Q${currentQuestionSerial}`);
@@ -534,10 +538,10 @@ async function startQuickPracticeSolver(answersMap) {
         const nextBtn = buttons.find(b => b.innerText.includes('পরের প্রশ্ন') || b.innerText.includes('শেষ করুন') || b.innerText.includes('Submit'));
 
         if (nextBtn) {
-            ['mousedown','mouseup','click'].forEach(type =>
+            ['mousedown', 'mouseup', 'click'].forEach(type =>
                 nextBtn.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
             );
-            
+
             if (nextBtn.innerText.includes('শেষ করুন') || nextBtn.innerText.includes('Submit')) {
                 console.log('Quiz Auto Pro: Finished quick practice exam.');
                 break;
@@ -573,30 +577,37 @@ async function startQuickPracticeSolver(answersMap) {
         if (battleInterval) stopBattleMode();
 
         try {
-            const fullId = window.location.pathname.split('/battle/')[1];
-            if (!fullId) throw new Error("Not on a valid battle page");
-            const druto_id = fullId.split('-')[0];
+            let druto_id = window.currentBattleId;
+            if (!druto_id) {
+                // Fallback: extract BATTLE_ followed by exactly 16 characters
+                const match = window.location.href.match(/BATTLE_[a-zA-Z0-9_\-]{16}/);
+                if (match) {
+                    druto_id = match[0];
+                } else {
+                    throw new Error("Battle ID not found! Please refresh the page so the extension can capture it.");
+                }
+            }
 
             sendLog("Battle ID: " + druto_id, 'info');
 
             const response = await fetch(
-              "https://mujib.chorcha.net/battle/exam-config",
-              {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ druto_id })
-              }
+                "https://mujib.chorcha.net/battle/exam-config",
+                {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ druto_id })
+                }
             );
 
             const result = await response.json();
             const questions = result?.data?.questions || [];
-            
+
             const source = {};
             questions.forEach((q, index) => {
-              source[index + 1] = q.answer;
+                source[index + 1] = q.answer;
             });
 
             sendLog(`Loaded ${Object.keys(source).length} battle answers`, 'ok');
@@ -613,7 +624,7 @@ async function startQuickPracticeSolver(answersMap) {
                 }
 
                 const isTransitioning = document.body.innerText.includes('পরবর্তী প্রশ্নে যাওয়া হচ্ছে');
-                
+
                 if (isTransitioning) {
                     waitingForTransition = false;
                     return;
@@ -655,7 +666,7 @@ async function startQuickPracticeSolver(answersMap) {
         if (battleInterval) {
             clearInterval(battleInterval);
             battleInterval = null;
-            try { chrome.runtime.sendMessage({ action: 'BATTLE_STOPPED' }); } catch(e){}
+            try { chrome.runtime.sendMessage({ action: 'BATTLE_STOPPED' }); } catch (e) { }
         }
     }
 })();
