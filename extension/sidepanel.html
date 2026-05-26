@@ -14,15 +14,11 @@
 <body>
   <div class="app-wrapper">
 
-    <!-- ═══ Ambient glow background ═══ -->
-    <div class="ambient-glow"></div>
-
     <!-- ═══ Top App Bar ═══ -->
     <header class="top-app-bar">
       <div class="brand-cluster">
         <div class="brand-logo">
           <span class="material-symbols-rounded brand-icon-inner">smart_toy</span>
-          <div class="brand-logo-pulse"></div>
         </div>
         <div class="brand-text">
           <span class="brand-name">Quiz Auto <span class="brand-accent">Pro</span></span>
@@ -48,7 +44,7 @@
           <span class="nav-label">JSON</span>
         </button>
         <button class="nav-item" data-mode="ai" id="btn-ai">
-          <span class="material-symbols-rounded">neurology</span>
+          <span class="material-symbols-rounded">psychology</span>
           <span class="nav-label">AI</span>
         </button>
         <button class="nav-item" data-mode="api" id="btn-api">
@@ -227,9 +223,9 @@
         </div>
 
         <!-- Empty state -->
-        <div id="battle-placeholder" class="empty-state">
-          <div class="empty-icon-wrap" style="background: rgba(245,158,11,0.12);">
-            <span class="material-symbols-rounded" style="color:#f59e0b;">swords</span>
+        <div id="battle-placeholder" class="empty-state warning-state">
+          <div class="empty-icon-wrap">
+            <span class="material-symbols-rounded">swords</span>
           </div>
           <h4>Waiting for Battle Exam</h4>
           <p>Navigate to a chorcha.net Battle exam and start it. The config will be intercepted and shown here automatically.</p>
@@ -242,7 +238,7 @@
 
         <div class="m3-card elevated">
           <div class="card-header">
-            <span class="material-symbols-rounded card-header-icon" style="color:#22c55e">bolt</span>
+            <span class="material-symbols-rounded card-header-icon">bolt</span>
             <h3 class="card-title">Quick Practice Exam</h3>
           </div>
           <span class="field-support">Open a Quick Practice exam on chorcha.net and start it — answers are intercepted automatically. Then press <strong>Start Automation</strong>.</span>
@@ -263,8 +259,8 @@
         </div>
 
         <!-- Empty state -->
-        <div id="quick-placeholder" class="empty-state">
-          <div class="empty-icon-wrap lightning">
+        <div id="quick-placeholder" class="empty-state warning-state">
+          <div class="empty-icon-wrap">
             <span class="material-symbols-rounded">sensors</span>
           </div>
           <h4>Waiting for Quick Exam</h4>

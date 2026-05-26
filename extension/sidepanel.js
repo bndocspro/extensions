@@ -45,7 +45,30 @@ document.addEventListener('DOMContentLoaded', () => {
     let battleInterceptedAnswers = null; // answers captured from Battle interception
 
     // ─── Persist / Restore Settings ──────────────────────
-    chrome.storage.local.get(['mode', 'jsonData', 'apiKey', 'modelName', 'examUrl'], (res) => {
+    const safeStorage = {
+        get: (keys, cb) => {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(keys, cb);
+            } else {
+                const res = {};
+                keys.forEach(k => {
+                    res[k] = localStorage.getItem(k);
+                });
+                cb(res);
+            }
+        },
+        set: (obj) => {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set(obj);
+            } else {
+                Object.entries(obj).forEach(([k, v]) => {
+                    localStorage.setItem(k, v);
+                });
+            }
+        }
+    };
+
+    safeStorage.get(['mode', 'jsonData', 'apiKey', 'modelName', 'examUrl'], (res) => {
         if (res.mode)      setMode(res.mode);
         if (res.jsonData)  jsonData.value  = res.jsonData;
         if (res.apiKey)    apiKey.value    = res.apiKey;
@@ -53,10 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.examUrl)   examUrl.value   = res.examUrl;
     });
 
-    jsonData.addEventListener('input',   () => chrome.storage.local.set({ jsonData: jsonData.value }));
-    apiKey.addEventListener('input',     () => chrome.storage.local.set({ apiKey: apiKey.value }));
-    modelName.addEventListener('input',  () => chrome.storage.local.set({ modelName: modelName.value }));
-    examUrl.addEventListener('input',    () => chrome.storage.local.set({ examUrl: examUrl.value }));
+    jsonData.addEventListener('input',   () => safeStorage.set({ jsonData: jsonData.value }));
+    apiKey.addEventListener('input',     () => safeStorage.set({ apiKey: apiKey.value }));
+    modelName.addEventListener('input',  () => safeStorage.set({ modelName: modelName.value }));
+    examUrl.addEventListener('input',    () => safeStorage.set({ examUrl: examUrl.value }));
 
     // ─── Mode Toggle ──────────────────────────────────────
     const navSlider = document.querySelector('.nav-slider');
@@ -84,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        chrome.storage.local.set({ mode });
+        safeStorage.set({ mode });
     }
 
     jsonBtn.addEventListener('click',   () => setMode('json'));
@@ -233,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const serialJson = JSON.stringify(answers, null, 2);
 
             jsonData.value = serialJson;
-            chrome.storage.local.set({ jsonData: serialJson });
+            safeStorage.set({ jsonData: serialJson });
 
             setStatus(`Fetched ${count} answers successfully.`, 'success');
             addLog(`Loaded ${count} answers into JSON field`, 'ok');
@@ -343,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const serialJson = JSON.stringify(result, null, 2);
 
             jsonData.value = serialJson;
-            chrome.storage.local.set({ jsonData: serialJson });
+            safeStorage.set({ jsonData: serialJson });
 
             setStatus(`Found ${matched}/${questionList.length} answers from CDN API`, 'success');
             addLog(`✓ ${matched} matched, ${missed} not found — answers loaded into JSON field`, 'ok');
