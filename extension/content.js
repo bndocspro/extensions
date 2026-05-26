@@ -5,7 +5,7 @@ let isStopped = false;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'START_AUTOMATION') {
         isStopped = false; // reset on each start
-        
+
         // Use quick solver if in quick mode, answers exist, and single question layout is present
         if (request.config.mode === 'quick' && window.quickExamAnswers && document.querySelector('div.grid.gap-2')) {
             startQuickPracticeSolver(window.quickExamAnswers)
@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
             startAutomation(request.config)
                 .then(result => sendResponse(result))
-                .catch(err  => sendResponse({ status: 'error', message: err.message }));
+                .catch(err => sendResponse({ status: 'error', message: err.message }));
         }
         return true; // keep channel open for async
     }
@@ -27,7 +27,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'FETCH_EXAM_ANSWERS') {
         fetchExamAnswers(request.apiUrl)
             .then(answers => sendResponse({ status: 'ok', answers }))
-            .catch(err   => sendResponse({ status: 'error', message: err.message }));
+            .catch(err => sendResponse({ status: 'error', message: err.message }));
         return true; // async
     }
 });
@@ -35,7 +35,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ─── Battle and Quick Exam Solver Injection ─────────────────────────────
 const injectScript = document.createElement('script');
 injectScript.src = chrome.runtime.getURL('inject.js');
-injectScript.onload = function() {
+injectScript.onload = function () {
     this.remove();
 };
 document.documentElement.appendChild(injectScript);
@@ -53,8 +53,8 @@ function decodeValue(encodedStr, key) {
 }
 
 function decodeObject(obj, key) {
-    if (typeof obj === 'string')  return decodeValue(obj, key);
-    if (Array.isArray(obj))       return obj.map(item => decodeObject(item, key));
+    if (typeof obj === 'string') return decodeValue(obj, key);
+    if (Array.isArray(obj)) return obj.map(item => decodeObject(item, key));
     if (typeof obj === 'object' && obj !== null) {
         const result = {};
         for (const k in obj) result[k] = decodeObject(obj[k], key);
@@ -66,12 +66,16 @@ function decodeObject(obj, key) {
 // ─── Battle and Quick Exam answer cache ─────────────────────────────────
 window.battleAnswers = null;
 window.quickExamAnswers = null;
+window.currentBattleId = null;
+
 
 window.addEventListener('message', async (event) => {
     if (event.source !== window || !event.data) return;
-    
+
     if (event.data.type === 'BATTLE_CREATED') {
         const battleId = event.data.battleId;
+        window.currentBattleId = battleId;
+
         console.log('Quiz Auto Pro: Intercepted Battle ID:', battleId);
 
         try {
@@ -89,7 +93,7 @@ window.addEventListener('message', async (event) => {
             const data = await response.json();
             window.battleAnswers = decodeObject(data, chorchaId);
             console.log('Quiz Auto Pro: Battle config loaded.', window.battleAnswers);
-        } catch(e) {
+        } catch (e) {
             console.error('Quiz Auto Pro: Failed to fetch battle config:', e);
         }
     }
@@ -97,47 +101,62 @@ window.addEventListener('message', async (event) => {
     if (event.data.type === 'QUICK_EXAM_INTERCEPTED') {
         const { data, chorchaId } = event.data;
         const decodedData = decodeObject(data, chorchaId);
-        
+
         console.log('Quiz Auto Pro: Quick Exam config loaded.', decodedData);
-        
+
         try {
             // Support both questions array and answers array based on API response
             const items =
-                decodedData?.data?.answers         ||
-                decodedData?.answers               ||
+                decodedData?.data?.answers ||
+                decodedData?.answers ||
                 decodedData?.data?.exam?.questions ||
-                decodedData?.exam?.questions       ||
-                decodedData?.data?.questions       ||
+                decodedData?.exam?.questions ||
+                decodedData?.data?.questions ||
                 decodedData?.questions;
 
             if (Array.isArray(items) && items.length > 0) {
+                const flattenedItems = [];
+                items.forEach(item => {
+                    if (item?.q?.type === 'MCQ_N' && Array.isArray(item?.q?.meta?.question)) {
+                        item.q.meta.question.forEach(subQ => {
+                            flattenedItems.push({
+                                q: subQ,
+                                answer: subQ.answer,
+                                isSubQuestion: true
+                            });
+                        });
+                    } else {
+                        flattenedItems.push(item);
+                    }
+                });
+
                 const answers = {};
-                items.forEach((item, idx) => {
+                flattenedItems.forEach((item, idx) => {
                     const serial = String(idx + 1);
-                    const answerVal = item?.answer ?? item?.q?.answer;
+                    const answerVal = item?.q?.answer ?? item?.answer;
 
                     if (answerVal === undefined || answerVal === null) return;
 
                     if (typeof answerVal === 'string' && /^[A-Ea-e]$/.test(answerVal.trim())) {
                         answers[serial] = answerVal.trim().toUpperCase();
                     } else if (typeof answerVal === 'number' && answerVal >= 0 && answerVal <= 4) {
-                        answers[serial] = ['A','B','C','D','E'][answerVal];
+                        answers[serial] = ['A', 'B', 'C', 'D', 'E'][answerVal];
                     } else if (typeof answerVal === 'string' && /^[0-4]$/.test(answerVal)) {
-                        answers[serial] = ['A','B','C','D','E'][parseInt(answerVal)];
+                        answers[serial] = ['A', 'B', 'C', 'D', 'E'][parseInt(answerVal)];
                     } else {
                         answers[serial] = String(answerVal).toUpperCase();
                     }
                 });
-                
+
                 window.quickExamAnswers = answers;
                 console.log('Quiz Auto Pro: Quick Exam extracted answers map:', window.quickExamAnswers);
-                
+
                 // Send the answers map to the sidepanel/background immediately
                 if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
                     chrome.runtime.sendMessage({
                         action: 'QUICK_EXAM_DATA',
                         data: window.quickExamAnswers
-                    }).catch(() => {});
+                    }).catch(() => { });
                 }
             }
         } catch (e) {
@@ -152,19 +171,39 @@ function sleep(ms) {
 }
 
 function sendLog(text, level = 'default') {
-    chrome.runtime.sendMessage({ action: 'LOG', text, level }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'LOG', text, level }).catch(() => { });
 }
 
 function sendProgress(done, total) {
-    chrome.runtime.sendMessage({ action: 'PROGRESS_UPDATE', done, total }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'PROGRESS_UPDATE', done, total }).catch(() => { });
 }
 
 // ─── Main Automation ─────────────────────────────────────
 async function startAutomation(config) {
     console.log('Quiz Auto Pro: Starting automation...', config.mode);
 
-    const SELECTOR = 'div.border.dark\\:border-gray-700.rounded-xl.p-5.relative';
-    const allContainers = Array.from(document.querySelectorAll(SELECTOR));
+    const mainContainers = Array.from(document.querySelectorAll('div.border.dark\\:border-gray-700.rounded-xl.p-5.relative'));
+    const allContainers = [];
+
+    let mainIdx = 0;
+    mainContainers.forEach(container => {
+        const subQuestions = Array.from(container.querySelectorAll('div.border.rounded-xl, div.border.rounded-lg')).filter(el => {
+            return el.querySelector('button.cursor-pointer') !== null;
+        });
+        if (subQuestions.length > 0) {
+            subQuestions.forEach((sub, subIdx) => {
+                sub.dataset.qaParentIndex = mainIdx;
+                sub.dataset.qaSubIndex = subIdx;
+                sub.dataset.qaIsSub = 'true';
+                allContainers.push(sub);
+            });
+        } else {
+            container.dataset.qaParentIndex = mainIdx;
+            container.dataset.qaIsSub = 'false';
+            allContainers.push(container);
+        }
+        mainIdx++;
+    });
 
     if (allContainers.length === 0) {
         throw new Error('No questions found on the page.');
@@ -222,7 +261,7 @@ async function startAutomation(config) {
         chrome.runtime.sendMessage({
             action: 'RECHECK_START',
             count: failedContainers.length
-        }).catch(() => {});
+        }).catch(() => { });
 
         console.log(`Quiz Auto Pro: Re-checking ${failedContainers.length} missed question(s)...`);
         await sleep(400);
@@ -242,7 +281,7 @@ async function startAutomation(config) {
                 answeredCount++;
                 sendProgress(answeredCount, total);
                 sendLog(`Re-check OK: Q${idx + 1}`, 'ok');
-            } catch(e) {
+            } catch (e) {
                 console.error('Re-check failed for Q' + (idx + 1) + ':', e);
                 sendLog(`Re-check failed: Q${idx + 1}`, 'err');
                 stillFailed.push(container);
@@ -266,12 +305,15 @@ async function startAutomation(config) {
 
 // ─── Process a single question ───────────────────────────
 async function processQuestion(container, originalIndex, config) {
-    const qElement = container.querySelector('div.pr-8.mb-2.font-medium.text-card-foreground');
+    let qElement = container.querySelector('div.pr-8.mb-2.font-medium.text-card-foreground');
+    if (!qElement) {
+        qElement = container.querySelector('div.font-medium.text-card-foreground');
+    }
     if (!qElement) throw new Error('Question text element not found');
 
     const qText = qElement.innerText.trim();
-    let qNumber  = (originalIndex + 1).toString();
-    const numMatch = qText.match(/^(\d+|[১-৯০]+)/);
+    let qNumber = (originalIndex + 1).toString();
+    const numMatch = qText.match(/^(\d+(?:\.\d+)?|[১-৯০]+(?:\.[১-৯০]+)?)/);
     if (numMatch) qNumber = numMatch[1];
 
     // Build options list
@@ -280,11 +322,11 @@ async function processQuestion(container, originalIndex, config) {
     const optionMap = { 'ক': 'A', 'খ': 'B', 'গ': 'C', 'ঘ': 'D' };
 
     optionBtns.forEach((btn, index) => {
-        const span  = btn.querySelector('span');
-        let letter  = span ? span.innerText.trim() : '';
+        const span = btn.querySelector('span');
+        let letter = span ? span.innerText.trim() : '';
         letter = letter.replace(/[\.)\s]/g, '');
         const label = optionMap[letter] || String.fromCharCode(65 + index);
-        let text    = btn.innerText;
+        let text = btn.innerText;
         if (span) text = text.replace(span.innerText, '').trim();
         options.push({ label, text, element: btn });
     });
@@ -320,30 +362,114 @@ async function processQuestion(container, originalIndex, config) {
 
     if (!answerLabel) {
         if (config.mode === 'json') {
-        let answersData = JSON.parse(config.jsonData);
+            let answersData = JSON.parse(config.jsonData);
+            let normalizedAnswers = {};
 
-        // Normalize: handle flat object, single-element array, or array-of-single-key-objects
-        if (Array.isArray(answersData)) {
-            if (answersData.length === 0) {
-                answersData = {};
-            } else if (answersData.length === 1) {
-                // [{"1":"C","2":"A",...}] or [{"1":"C"}]
-                answersData = answersData[0];
+            const normalizeVal = (val) => {
+                if (val === null || val === undefined) return val;
+                if (Array.isArray(val)) {
+                    return val.map(normalizeVal);
+                }
+                if (typeof val === 'string' && /^[A-Ea-e]$/.test(val.trim())) {
+                    return val.trim().toUpperCase();
+                } else if (typeof val === 'number' && val >= 0 && val <= 4) {
+                    return ['A', 'B', 'C', 'D', 'E'][val];
+                } else if (typeof val === 'string' && /^[0-4]$/.test(val)) {
+                    return ['A', 'B', 'C', 'D', 'E'][parseInt(val)];
+                } else {
+                    return String(val).toUpperCase();
+                }
+            };
+
+            if (Array.isArray(answersData)) {
+                if (answersData.length > 0 && (answersData[0]?.q !== undefined || answersData[0]?.answer !== undefined)) {
+                    let qSerial = 1;
+                    answersData.forEach((item) => {
+                        const isMCQN = item.type === 'MCQ_N' || item?.q?.type === 'MCQ_N';
+                        if (isMCQN && item.q && item.q.meta && Array.isArray(item.q.meta.question)) {
+                            const subAnswers = item.q.meta.question.map(sub => sub.answer).filter(ans => ans !== undefined && ans !== null);
+                            if (subAnswers.length > 0) {
+                                normalizedAnswers[String(qSerial)] = subAnswers.map(normalizeVal);
+                            }
+                        } else {
+                            const ans = item.q && item.q.answer !== undefined ? item.q.answer : item.answer;
+                            if (ans !== undefined && ans !== null) {
+                                normalizedAnswers[String(qSerial)] = normalizeVal(ans);
+                            }
+                        }
+                        qSerial++;
+                    });
+                } else {
+                    if (answersData.length === 0) {
+                        normalizedAnswers = {};
+                    } else if (answersData.length === 1) {
+                        for (const k in answersData[0]) {
+                            normalizedAnswers[k] = normalizeVal(answersData[0][k]);
+                        }
+                    } else {
+                        answersData.forEach(obj => {
+                            for (const k in obj) {
+                                normalizedAnswers[k] = normalizeVal(obj[k]);
+                            }
+                        });
+                    }
+                }
             } else {
-                // [{"1":"C"},{"2":"A"},{"3":"B"},...] — merge all into one flat map
-                answersData = Object.assign({}, ...answersData);
+                for (const k in answersData) {
+                    normalizedAnswers[k] = normalizeVal(answersData[k]);
+                }
             }
-        }
 
-        answerLabel = answersData[qNumber];
+            // 1. Try direct lookup with qNumber (e.g. "195.1" or "১৯৫.১")
+            answerLabel = normalizedAnswers[qNumber];
 
-        if (!answerLabel) {
-            const engNum = qNumber.replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d).toString());
-            answerLabel = answersData[engNum];
-        }
-        if (!answerLabel) {
-            answerLabel = answersData[(originalIndex + 1).toString()];
-        }
+            // 2. Try direct lookup with English-digit qNumber (e.g. "195.1")
+            if (!answerLabel) {
+                const engNum = qNumber.replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d).toString());
+                answerLabel = normalizedAnswers[engNum];
+            }
+
+            // 3. Try MCQ_N array lookup using parsed question number (main.sub)
+            if (!answerLabel) {
+                const engNum = qNumber.replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d).toString());
+                const match = engNum.match(/^(\d+)\.(\d+)$/);
+                if (match) {
+                    const mainNum = match[1];
+                    const subIdx = parseInt(match[2], 10);
+                    let parentAns = normalizedAnswers[mainNum];
+                    if (!parentAns) {
+                        const benMainNum = mainNum.replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d, 10)]);
+                        parentAns = normalizedAnswers[benMainNum];
+                    }
+                    if (Array.isArray(parentAns) && subIdx > 0 && subIdx <= parentAns.length) {
+                        answerLabel = parentAns[subIdx - 1];
+                    }
+                }
+            }
+
+            // 4. Try MCQ_N array lookup using DOM dataset attributes (ParentIndex and SubIndex)
+            if (!answerLabel) {
+                const parentIdxAttr = container.dataset.qaParentIndex;
+                const subIdxAttr = container.dataset.qaSubIndex;
+                const isSub = container.dataset.qaIsSub === 'true';
+                if (isSub && parentIdxAttr !== undefined && subIdxAttr !== undefined) {
+                    const mainNum = String(parseInt(parentIdxAttr, 10) + 1);
+                    const subIdx = parseInt(subIdxAttr, 10);
+                    let parentAns = normalizedAnswers[mainNum];
+                    if (!parentAns) {
+                        const benMainNum = mainNum.replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[parseInt(d, 10)]);
+                        parentAns = normalizedAnswers[benMainNum];
+                    }
+                    if (Array.isArray(parentAns) && subIdx >= 0 && subIdx < parentAns.length) {
+                        answerLabel = parentAns[subIdx];
+                    }
+                }
+            }
+
+            // 5. Fallback to flat sequential index lookup (e.g. "195")
+            if (!answerLabel) {
+                answerLabel = normalizedAnswers[(originalIndex + 1).toString()];
+            }
 
         } else if (config.mode === 'ai') {
             if (!config.apiKey) throw new Error('API Key is missing for AI Mode.');
@@ -355,7 +481,7 @@ async function processQuestion(container, originalIndex, config) {
         const target = options.find(o => o.label.toUpperCase() === answerLabel.toUpperCase());
         if (target) {
             // Use dispatchEvent (bubbles) for React/Next.js — bare .click() is often ignored
-            ['mousedown','mouseup','click'].forEach(type =>
+            ['mousedown', 'mouseup', 'click'].forEach(type =>
                 target.element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
             );
             console.log(`Quiz Auto Pro: Q${qNumber} → ${answerLabel}`);
@@ -380,14 +506,14 @@ async function submitQuiz() {
 function getAiAnswer(question, options, config) {
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({
-            action:   'GET_AI_ANSWER',
+            action: 'GET_AI_ANSWER',
             question: question,
-            options:  options.map(o => `${o.label}: ${o.text}`).join('\n'),
-            config:   config
+            options: options.map(o => `${o.label}: ${o.text}`).join('\n'),
+            config: config
         }, response => {
-            if (!response)          reject(new Error('Background script did not respond.'));
+            if (!response) reject(new Error('Background script did not respond.'));
             else if (response.error) reject(new Error(response.error));
-            else                    resolve(response.answer);
+            else resolve(response.answer);
         });
     });
 }
@@ -417,8 +543,8 @@ async function fetchExamAnswers(apiUrl) {
     // Try all known paths in order
     const questions =
         data?.data?.exam?.questions ||
-        data?.exam?.questions       ||
-        data?.data?.questions       ||
+        data?.exam?.questions ||
+        data?.data?.questions ||
         data?.questions;
 
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -430,30 +556,40 @@ async function fetchExamAnswers(apiUrl) {
 
     // Build serial map { "1": "C", "2": "A", ... }
     // Each item structure: { p, q: { _id, answer, question, A, B, C, D }, s, t, type }
+    const normalizeVal = (val) => {
+        if (typeof val === 'string' && /^[A-Ea-e]$/.test(val.trim())) {
+            return val.trim().toUpperCase();
+        } else if (typeof val === 'number' && val >= 0 && val <= 4) {
+            return ['A', 'B', 'C', 'D', 'E'][val];
+        } else if (typeof val === 'string' && /^[0-4]$/.test(val)) {
+            return ['A', 'B', 'C', 'D', 'E'][parseInt(val)];
+        } else {
+            return String(val).toUpperCase();
+        }
+    };
+
+    const flattenedQuestions = [];
+    questions.forEach((item) => {
+        if (item?.q?.type === 'MCQ_N' && Array.isArray(item?.q?.meta?.question)) {
+            item.q.meta.question.forEach((subQ) => {
+                flattenedQuestions.push({
+                    q: subQ,
+                    answer: subQ.answer
+                });
+            });
+        } else {
+            flattenedQuestions.push(item);
+        }
+    });
+
     const answers = {};
-    questions.forEach((item, idx) => {
+    flattenedQuestions.forEach((item, idx) => {
         const serial = String(idx + 1);
-        // Answer is at item.q.answer (primary) or item.answer (fallback)
         const answerVal = item?.q?.answer ?? item?.answer;
 
         if (answerVal === undefined || answerVal === null) return;
 
-        // If answer is already a letter string (A/B/C/D), use it directly
-        if (typeof answerVal === 'string' && /^[A-Ea-e]$/.test(answerVal.trim())) {
-            answers[serial] = answerVal.trim().toUpperCase();
-        }
-        // If answer is a numeric index (0-4), convert to letter
-        else if (typeof answerVal === 'number' && answerVal >= 0 && answerVal <= 4) {
-            answers[serial] = ['A','B','C','D','E'][answerVal];
-        }
-        // If answer is a string digit "0"-"4"
-        else if (typeof answerVal === 'string' && /^[0-4]$/.test(answerVal)) {
-            answers[serial] = ['A','B','C','D','E'][parseInt(answerVal)];
-        }
-        // Otherwise keep the raw value
-        else {
-            answers[serial] = String(answerVal).toUpperCase();
-        }
+        answers[serial] = normalizeVal(answerVal);
     });
 
     console.log('Quiz Auto Pro: Fetched answers map:', answers);
@@ -479,35 +615,47 @@ async function startQuickPracticeSolver(answersMap) {
             continue;
         }
 
-        // Wait for question options to appear
-        let retries = 2; // Wait up to 15 seconds
+        // Wait for question options to appear (SPA — DOM is replaced between questions)
+        let retries = 15; // up to ~7.5s
         let options = [];
         while (retries > 0 && !isStopped) {
-            const grid = document.querySelector('div.grid.gap-2');
-            if (grid) {
-                options = grid.querySelectorAll('button');
+            // Priority-ordered selectors — battle uses rounded-lg, quiz uses rounded-xl
+            const candidates = [
+                'div.grid > button',
+                'div.grid.gap-2 > button',
+                'button.flex.w-full.gap-2.rounded-lg',
+                'button.flex.w-full.gap-2.rounded-xl',
+                'button.cursor-pointer',
+            ];
+            for (const sel of candidates) {
+                const els = document.querySelectorAll(sel);
+                if (els.length >= 2) { options = Array.from(els); break; }
             }
-            if (!options || options.length === 0) {
-                // Fallback selector
-                options = document.querySelectorAll('button.flex.w-full.gap-2.rounded-xl.py-3.px-4.items-center.border');
+            // Last resort: div whose every direct child is a button
+            if (options.length === 0) {
+                for (const d of document.querySelectorAll('div')) {
+                    const kids = Array.from(d.children);
+                    if (kids.length >= 2 && kids.every(k => k.tagName === 'BUTTON')) {
+                        options = kids; break;
+                    }
+                }
             }
-            
             if (options.length > 0) break;
             await sleep(500);
             retries--;
         }
 
         if (options.length === 0) {
-            console.error('Options not found, stopping quick practice automation.');
+            console.error('Quiz Auto Pro: Options not found, stopping quick practice automation.');
             break;
         }
 
         // Map answer letter to option index
         const letterToIndex = { 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4 };
         const index = letterToIndex[answerLabel.toUpperCase()];
-        
+
         if (index !== undefined && options[index]) {
-            ['mousedown','mouseup','click'].forEach(type =>
+            ['mousedown', 'mouseup', 'click'].forEach(type =>
                 options[index].dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
             );
             console.log(`Quiz Auto Pro: Clicked option ${answerLabel} for Q${currentQuestionSerial}`);
@@ -522,10 +670,10 @@ async function startQuickPracticeSolver(answersMap) {
         const nextBtn = buttons.find(b => b.innerText.includes('পরের প্রশ্ন') || b.innerText.includes('শেষ করুন') || b.innerText.includes('Submit'));
 
         if (nextBtn) {
-            ['mousedown','mouseup','click'].forEach(type =>
+            ['mousedown', 'mouseup', 'click'].forEach(type =>
                 nextBtn.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
             );
-            
+
             if (nextBtn.innerText.includes('শেষ করুন') || nextBtn.innerText.includes('Submit')) {
                 console.log('Quiz Auto Pro: Finished quick practice exam.');
                 break;
@@ -538,3 +686,119 @@ async function startQuickPracticeSolver(answersMap) {
         await sleep(1000); // Wait for the next question to render
     }
 }
+
+// ═══════════════════════════════════════════════════════════
+// ═══ BATTLE MODE — Automation Background System ════════════
+// ═══════════════════════════════════════════════════════════
+
+(() => {
+    let battleInterval = null;
+
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+        if (msg.action === 'BATTLE_DEPLOY') {
+            startBattleMode();
+            sendResponse({ status: 'started' });
+        }
+        if (msg.action === 'BATTLE_REMOVE') {
+            stopBattleMode();
+            sendResponse({ status: 'stopped' });
+        }
+    });
+
+    async function startBattleMode() {
+        if (battleInterval) stopBattleMode();
+
+        try {
+            let druto_id = window.currentBattleId;
+            if (!druto_id) {
+                // Fallback: extract BATTLE_ followed by exactly 16 characters
+                const match = window.location.href.match(/BATTLE_[a-zA-Z0-9_\-]{16}/);
+                if (match) {
+                    druto_id = match[0];
+                } else {
+                    throw new Error("Battle ID not found! Please refresh the page so the extension can capture it.");
+                }
+            }
+
+            sendLog("Battle ID: " + druto_id, 'info');
+
+            const response = await fetch(
+                "https://mujib.chorcha.net/battle/exam-config",
+                {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ druto_id })
+                }
+            );
+
+            const result = await response.json();
+            const questions = result?.data?.questions || [];
+
+            const source = {};
+            questions.forEach((q, index) => {
+                source[index + 1] = q.answer;
+            });
+
+            sendLog(`Loaded ${Object.keys(source).length} battle answers`, 'ok');
+
+            const buttonMap = { A: 0, B: 1, C: 2, D: 3 };
+            let current = 1;
+            let waitingForTransition = false;
+
+            battleInterval = setInterval(() => {
+                if (!source[current]) {
+                    stopBattleMode();
+                    sendLog("Battle Completed!", 'ok');
+                    return;
+                }
+
+                const isTransitioning = document.body.innerText.includes('পরবর্তী প্রশ্নে যাওয়া হচ্ছে');
+
+                if (isTransitioning) {
+                    waitingForTransition = false;
+                    return;
+                }
+
+                if (waitingForTransition) return;
+
+                const answer = source[current];
+                const buttonIndex = buttonMap[answer];
+
+                const buttons = [
+                    ...document.querySelectorAll(
+                        'button.custom-scrollbar, button.flex.w-full.custom-scrollbar'
+                    )
+                ].filter(btn => btn.innerText.trim() !== "");
+
+                if (buttons.length >= 4) {
+                    const targetButton = buttons[buttonIndex];
+                    if (targetButton) {
+                        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
+                            targetButton.dispatchEvent(new MouseEvent(type, {
+                                bubbles: true, cancelable: true, view: window
+                            }));
+                        });
+
+                        sendLog(`Battle Q${current}: clicked ${answer}`, 'ok');
+                        current++;
+                        waitingForTransition = true;
+                    }
+                }
+            }, 1000);
+
+        } catch (err) {
+            sendLog("Battle start error: " + err.message, 'err');
+        }
+    }
+
+    function stopBattleMode() {
+        if (battleInterval) {
+            clearInterval(battleInterval);
+            battleInterval = null;
+            try { chrome.runtime.sendMessage({ action: 'BATTLE_STOPPED' }); } catch (e) { }
+        }
+    }
+})();

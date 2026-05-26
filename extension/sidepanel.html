@@ -6,220 +6,314 @@
   <title>Quiz Auto Pro</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <div class="container">
+  <div class="app-wrapper">
 
-    <!-- Header -->
-    <header class="header">
-      <div class="logo">
-        <div class="logo-icon"><i class="bi bi-robot"></i></div>
-        <div class="logo-text">
-          <span class="logo-title">Quiz Auto Pro</span>
-          <span class="logo-version">v1.1</span>
+    <!-- ═══ Ambient glow background ═══ -->
+    <div class="ambient-glow"></div>
+
+    <!-- ═══ Top App Bar ═══ -->
+    <header class="top-app-bar">
+      <div class="brand-cluster">
+        <div class="brand-logo">
+          <span class="material-symbols-rounded brand-icon-inner">smart_toy</span>
+          <div class="brand-logo-pulse"></div>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Quiz Auto <span class="brand-accent">Pro</span></span>
+          <div class="brand-meta">
+            <span class="version-badge">v1.1</span>
+            <div id="status-dot" class="status-indicator idle" title="Idle">
+              <div class="status-ring"></div>
+            </div>
+          </div>
         </div>
       </div>
-      <div id="status-dot" class="status-dot idle" title="Idle"></div>
+      <button class="top-action-btn" title="Settings">
+        <span class="material-symbols-rounded">tune</span>
+      </button>
     </header>
 
-    <!-- Mode Selector -->
-    <div class="mode-selector">
-      <button class="mode-btn active" data-mode="json" id="btn-json">
-        <i class="bi bi-filetype-json"></i>
-        JSON
-      </button>
-      <button class="mode-btn" data-mode="ai" id="btn-ai">
-        <i class="bi bi-cpu"></i>
-        AI
-      </button>
-      <button class="mode-btn" data-mode="api" id="btn-api">
-        <i class="bi bi-cloud-download"></i>
-        API Fetch
-      </button>
-      <button class="mode-btn" data-mode="quick" id="btn-quick">
-        <i class="bi bi-lightning-charge"></i>
-        Quick/Battle
-      </button>
-    </div>
+    <!-- ═══ Navigation Rail ═══ -->
+    <nav class="nav-rail">
+      <div class="nav-track">
+        <div class="nav-slider"></div>
+        <button class="nav-item active" data-mode="json" id="btn-json">
+          <span class="material-symbols-rounded">data_object</span>
+          <span class="nav-label">JSON</span>
+        </button>
+        <button class="nav-item" data-mode="ai" id="btn-ai">
+          <span class="material-symbols-rounded">neurology</span>
+          <span class="nav-label">AI</span>
+        </button>
+        <button class="nav-item" data-mode="api" id="btn-api">
+          <span class="material-symbols-rounded">cloud_download</span>
+          <span class="nav-label">API</span>
+        </button>
+        <button class="nav-item" data-mode="battle" id="btn-battle">
+          <span class="material-symbols-rounded">swords</span>
+          <span class="nav-label">Battle</span>
+        </button>
+        <button class="nav-item" data-mode="quick" id="btn-quick">
+          <span class="material-symbols-rounded">bolt</span>
+          <span class="nav-label">Quick</span>
+        </button>
+      </div>
+    </nav>
 
-    <!-- JSON Mode Panel -->
-    <div id="panel-json" class="panel active">
+    <!-- ═══ Scrollable Content ═══ -->
+    <main class="content-scroll">
 
-      <!-- Auto-fetch section -->
-      <div class="fetch-section">
-        <div class="field-group">
-          <label for="exam-url">
-            <i class="bi bi-link-45deg"></i>
-            Exam URL
-          </label>
-          <div class="url-row">
-            <input type="text" id="exam-url" placeholder="https://chorcha.net/exam/abc123" autocomplete="off">
-            <button id="fetch-btn" class="btn-fetch" title="Fetch answers from exam URL">
-              <i class="bi bi-cloud-arrow-down-fill"></i>
-              Fetch
-            </button>
+      <!-- ── JSON Mode ── -->
+      <section id="panel-json" class="panel active">
+
+        <!-- Fetch Card -->
+        <div class="m3-card elevated">
+          <div class="card-header">
+            <span class="material-symbols-rounded card-header-icon">link</span>
+            <h3 class="card-title">Connect Exam</h3>
           </div>
-          <span class="field-hint">Paste the chorcha.net exam page URL to auto-load answers</span>
-          <button id="cdn-lookup-btn" class="btn-cdn-lookup" title="Find answers via CDN data.json by question _id">
-            <i class="bi bi-search"></i>
+
+          <div class="field-group">
+            <div class="m3-field">
+              <span class="material-symbols-rounded field-leading">language</span>
+              <input type="text" id="exam-url" placeholder=" " autocomplete="off">
+              <label for="exam-url">Exam URL</label>
+              <button id="fetch-btn" class="field-action-btn" title="Fetch answers from exam URL">
+                <span class="material-symbols-rounded">cloud_sync</span>
+                <span>Fetch</span>
+              </button>
+            </div>
+            <span class="field-support">Paste the chorcha.net exam page URL to auto-load answers</span>
+          </div>
+
+          <button id="cdn-lookup-btn" class="m3-btn tonal full-width" title="Find answers via CDN data.json by question _id">
+            <span class="material-symbols-rounded">travel_explore</span>
             <span id="cdn-lookup-text">Find Answers via CDN API</span>
           </button>
-          <span class="field-hint cdn-hint">Searches <code>data.json</code> by question <code>_id</code> — open the exam tab first</span>
+          <span class="field-support cdn-hint">Searches <code>data.json</code> by question <code>_id</code> — open the exam tab first</span>
         </div>
-      </div>
 
-      <div class="divider">
-        <span>or paste manually</span>
-      </div>
-
-      <div class="field-group">
-        <div class="json-label-row">
-          <label for="json-data">
-            <i class="bi bi-file-earmark-code"></i>
-            Answer JSON Data
-          </label>
-          <button id="copy-json" class="btn-icon-sm" title="Copy JSON">
-            <i class="bi bi-clipboard"></i>
-          </button>
+        <!-- Divider -->
+        <div class="m3-divider">
+          <span>or paste manually</span>
         </div>
-        <textarea id="json-data" placeholder='[{ "1": "D", "2": "A", "3": "B" }]' spellcheck="false"></textarea>
-        <span class="field-hint">Format: question number → answer letter (A-D)</span>
-      </div>
-    </div>
 
-    <!-- API Fetch Panel -->
-    <div id="panel-api" class="panel">
-      <!-- Fetch trigger -->
-      <div class="api-fetch-header">
-        <div class="api-fetch-info">
-          <i class="bi bi-hdd-network"></i>
-          <span>Fetch &amp; Decode Exam API</span>
-        </div>
-        <button id="api-fetch-btn" class="btn-api-run" title="Run Chorcha API fetcher on active tab">
-          <i id="api-fetch-icon" class="bi bi-play-fill"></i>
-          Run
-        </button>
-      </div>
-
-      <span class="field-hint" style="margin-top:-4px;">Opens the active chorcha.net exam tab, fetches and decodes all questions. Cookies are sent automatically.</span>
-
-      <!-- Meta row (key + count) — hidden until fetched -->
-      <div id="api-meta-row" class="api-meta-row hidden">
-        <span class="api-meta-chip">
-          <i class="bi bi-key"></i>
-          <span id="api-key-val">—</span>
-        </span>
-        <span class="api-meta-chip">
-          <i class="bi bi-question-circle"></i>
-          <span id="api-count-val">0 questions</span>
-        </span>
-      </div>
-
-      <!-- Code box -->
-      <div id="api-response-wrap" class="api-response-wrap hidden">
-        <div class="api-code-header">
-          <span class="api-code-label">
-            <i class="bi bi-file-earmark-code"></i>
-            Decoded JSON Response
-          </span>
-          <div class="api-code-actions">
-            <button id="api-copy-btn" class="btn-icon-sm" title="Copy decoded JSON">
-              <i class="bi bi-clipboard"></i>
-            </button>
-            <button id="api-clear-btn" class="btn-icon-sm btn-clear-api" title="Clear response">
-              <i class="bi bi-trash3"></i>
+        <!-- JSON Editor Card -->
+        <div class="m3-card elevated">
+          <div class="card-header">
+            <span class="material-symbols-rounded card-header-icon">code_blocks</span>
+            <h3 class="card-title">Answer Data</h3>
+            <button id="copy-json" class="icon-btn-sm" title="Copy JSON">
+              <span class="material-symbols-rounded">content_copy</span>
             </button>
           </div>
+          <textarea id="json-data" class="m3-code-area" placeholder='{ "1": "A", "2": "B", "3": "C" }' spellcheck="false"></textarea>
+          <span class="field-support">Format: question number → answer letter (A-D)</span>
         </div>
-        <pre id="api-response-box" class="api-code-box"></pre>
+      </section>
+
+      <!-- ── API Fetch Mode ── -->
+      <section id="panel-api" class="panel">
+
+        <div class="m3-card elevated">
+          <div class="card-header">
+            <span class="material-symbols-rounded card-header-icon">dns</span>
+            <h3 class="card-title">Fetch & Decode Exam API</h3>
+            <button id="api-fetch-btn" class="m3-btn filled compact" title="Run Chorcha API fetcher on active tab">
+              <i id="api-fetch-icon" class="bi bi-play-fill"></i>
+              <span>Run</span>
+            </button>
+          </div>
+          <span class="field-support">Opens the active chorcha.net exam tab, fetches and decodes all questions. Cookies are sent automatically.</span>
+        </div>
+
+        <!-- Meta chips -->
+        <div id="api-meta-row" class="chip-row hidden">
+          <div class="m3-chip">
+            <span class="material-symbols-rounded chip-icon">vpn_key</span>
+            <span id="api-key-val">—</span>
+          </div>
+          <div class="m3-chip">
+            <span class="material-symbols-rounded chip-icon">quiz</span>
+            <span id="api-count-val">0 questions</span>
+          </div>
+        </div>
+
+        <!-- Code output -->
+        <div id="api-response-wrap" class="m3-code-card hidden">
+          <div class="code-card-header">
+            <div class="code-card-title">
+              <span class="material-symbols-rounded">terminal</span>
+              <span>Decoded JSON Response</span>
+            </div>
+            <div class="code-card-actions">
+              <button id="api-copy-btn" class="icon-btn-sm" title="Copy decoded JSON">
+                <span class="material-symbols-rounded">content_copy</span>
+              </button>
+              <button id="api-clear-btn" class="icon-btn-sm danger" title="Clear response">
+                <span class="material-symbols-rounded">delete</span>
+              </button>
+            </div>
+          </div>
+          <pre id="api-response-box" class="code-output"></pre>
+        </div>
+
+        <!-- Placeholder -->
+        <div id="api-placeholder" class="empty-state">
+          <div class="empty-icon-wrap">
+            <span class="material-symbols-rounded">inbox</span>
+          </div>
+          <p>Click <strong>Run</strong> while on a chorcha.net exam page to fetch & decode the full question JSON.</p>
+        </div>
+      </section>
+
+      <!-- ── AI Mode ── -->
+      <section id="panel-ai" class="panel">
+        <div class="m3-card elevated">
+          <div class="card-header">
+            <span class="material-symbols-rounded card-header-icon">psychology</span>
+            <h3 class="card-title">Gemini Configuration</h3>
+          </div>
+
+          <div class="field-group">
+            <div class="m3-field">
+              <span class="material-symbols-rounded field-leading">key</span>
+              <div class="input-wrapper">
+                <input type="password" id="api-key" placeholder=" " autocomplete="off">
+                <label for="api-key">API Key</label>
+                <button class="field-eye-btn" id="toggle-key" title="Show/Hide Key">
+                  <span class="material-symbols-rounded">visibility</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="m3-field">
+              <span class="material-symbols-rounded field-leading">deployed_code</span>
+              <input type="text" id="model-name" value="gemma-4-31b-it" placeholder=" ">
+              <label for="model-name">Model Name</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Battle Mode ── -->
+      <section id="panel-battle" class="panel">
+
+        <!-- Intercepted answers box -->
+        <div id="battle-response-wrap" class="m3-code-card hidden">
+          <div class="code-card-header">
+            <div class="code-card-title">
+              <span class="material-symbols-rounded">terminal</span>
+              <span>Intercepted Battle Config</span>
+            </div>
+            <div class="code-card-actions">
+              <button id="battle-copy-btn" class="icon-btn-sm" title="Copy JSON">
+                <span class="material-symbols-rounded">content_copy</span>
+              </button>
+              <button id="battle-clear-btn" class="icon-btn-sm danger" title="Clear response">
+                <span class="material-symbols-rounded">delete</span>
+              </button>
+            </div>
+          </div>
+          <pre id="battle-response-box" class="code-output"></pre>
+        </div>
+
+        <!-- Empty state -->
+        <div id="battle-placeholder" class="empty-state">
+          <div class="empty-icon-wrap" style="background: rgba(245,158,11,0.12);">
+            <span class="material-symbols-rounded" style="color:#f59e0b;">swords</span>
+          </div>
+          <h4>Waiting for Battle Exam</h4>
+          <p>Navigate to a chorcha.net Battle exam and start it. The config will be intercepted and shown here automatically.</p>
+        </div>
+
+      </section>
+
+      <!-- ── Quick Exam Mode ── -->
+      <section id="panel-quick" class="panel">
+
+        <div class="m3-card elevated">
+          <div class="card-header">
+            <span class="material-symbols-rounded card-header-icon" style="color:#22c55e">bolt</span>
+            <h3 class="card-title">Quick Practice Exam</h3>
+          </div>
+          <span class="field-support">Open a Quick Practice exam on chorcha.net and start it — answers are intercepted automatically. Then press <strong>Start Automation</strong>.</span>
+        </div>
+
+        <!-- Intercepted answers box -->
+        <div id="quick-response-wrap" class="m3-code-card hidden">
+          <div class="code-card-header">
+            <div class="code-card-title">
+              <span class="material-symbols-rounded">terminal</span>
+              <span>Intercepted Answers Map</span>
+            </div>
+            <button id="quick-copy-btn" class="icon-btn-sm" title="Copy answers">
+              <span class="material-symbols-rounded">content_copy</span>
+            </button>
+          </div>
+          <pre id="quick-response-box" class="code-output"></pre>
+        </div>
+
+        <!-- Empty state -->
+        <div id="quick-placeholder" class="empty-state">
+          <div class="empty-icon-wrap lightning">
+            <span class="material-symbols-rounded">sensors</span>
+          </div>
+          <h4>Waiting for Quick Exam</h4>
+          <p>Navigate to a chorcha.net Quick Practice exam and start it. Answers will appear here automatically.</p>
+        </div>
+
+      </section>
+
+      <!-- ═══ Status Card ═══ -->
+      <div id="status" class="status-card">
+        <span class="material-symbols-rounded status-icon">info</span>
+        <span id="status-text">Ready to automate</span>
       </div>
 
-      <!-- Placeholder when nothing fetched yet -->
-      <div id="api-placeholder" class="api-placeholder">
-        <i class="bi bi-inbox"></i>
-        <span>Click <strong>Run</strong> while on a chorcha.net exam page to fetch &amp; decode the full question JSON.</span>
+      <!-- ═══ Progress Bar ═══ -->
+      <div id="progress-wrap" class="progress-container hidden">
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-fill"></div>
+        </div>
+        <span id="progress-label" class="progress-text">0 / 0</span>
       </div>
-    </div>
 
-    <!-- AI Mode Panel -->
-    <div id="panel-ai" class="panel">
-      <div class="field-group">
-        <label for="api-key">
-          <i class="bi bi-key-fill"></i>
-          Gemini API Key
-        </label>
-        <div class="input-wrapper">
-          <input type="password" id="api-key" placeholder="AIzaSy..." autocomplete="off">
-          <button class="toggle-eye" id="toggle-key" title="Show/Hide Key">
-            <i class="bi bi-eye"></i>
+      <!-- ═══ Activity Log ═══ -->
+      <div class="log-panel">
+        <div class="log-panel-header">
+          <div class="log-panel-title">
+            <span class="material-symbols-rounded">receipt_long</span>
+            <span>Activity Log</span>
+          </div>
+          <button id="clear-log" class="icon-btn-sm" title="Clear Log">
+            <span class="material-symbols-rounded">delete_sweep</span>
           </button>
         </div>
-      </div>
-      <div class="field-group">
-        <label for="model-name">
-          <i class="bi bi-box-seam"></i>
-          Model Name
-        </label>
-        <input type="text" id="model-name" value="gemma-4-31b-it">
-      </div>
-    </div>
-
-    <!-- Quick/Battle Mode Panel -->
-    <div id="panel-quick" class="panel">
-      <div id="quick-placeholder" class="api-placeholder">
-        <i class="bi bi-lightning-charge" style="font-size: 2rem; color: #f59e0b; margin-bottom: 8px;"></i>
-        <span><strong>Quick Exam / Battle Mode</strong><br><br>Open a Quick Exam or start a Battle. Answers will be automatically intercepted and displayed below. Then click <strong>Start Automation</strong>!</span>
-      </div>
-      <div id="quick-response-wrap" class="api-response-wrap hidden">
-        <div class="api-code-header">
-          <span class="api-code-label">
-            <i class="bi bi-file-earmark-code"></i>
-            Extracted Answers Map
-          </span>
+        <div id="log-area" class="log-stream">
+          <div class="log-empty">No activity yet</div>
         </div>
-        <pre id="quick-response-box" class="api-code-box"></pre>
       </div>
-    </div>
 
-    <!-- Action Buttons -->
-    <div class="action-row">
-      <button id="start-btn" class="btn-primary">
-        <i class="bi bi-play-circle-fill"></i>
+    </main>
+
+    <!-- ═══ Bottom Action Bar ═══ -->
+    <div class="bottom-bar">
+      <button id="start-btn" class="m3-fab-extended">
+        <span class="material-symbols-rounded">rocket_launch</span>
         <span>Start Automation</span>
       </button>
-      <button id="stop-btn" class="btn-stop" disabled title="Stop Automation">
-        <i class="bi bi-stop-circle-fill"></i>
+      <button id="stop-btn" class="m3-fab-small danger" disabled title="Stop Automation">
+        <span class="material-symbols-rounded">stop_circle</span>
       </button>
-    </div>
-
-    <!-- Progress Bar -->
-    <div id="progress-wrap" class="progress-wrap hidden">
-      <div class="progress-bar-track">
-        <div id="progress-bar" class="progress-bar-fill"></div>
-      </div>
-      <span id="progress-label" class="progress-label">0 / 0</span>
-    </div>
-
-    <!-- Status -->
-    <div id="status" class="status-card">
-      <i class="status-icon bi bi-info-circle-fill"></i>
-      <span id="status-text">Ready to automate</span>
-    </div>
-
-    <!-- Log Panel -->
-    <div class="log-section">
-      <div class="log-header">
-        <span>Activity Log</span>
-        <button id="clear-log" class="btn-clear" title="Clear Log">
-          <i class="bi bi-trash3"></i>
-        </button>
-      </div>
-      <div id="log-area" class="log-area">
-        <div class="log-empty">No activity yet</div>
-      </div>
     </div>
 
   </div>

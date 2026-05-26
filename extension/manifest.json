@@ -5,8 +5,8 @@
   "description": "Professional Chrome Extension for automated quiz answering on chorcha.net.",
   "action": {
     "default_icon": {
-      "16": "assets/icon16.png",
-      "48": "assets/icon48.png",
+      "16": "assets/icon128.png",
+      "48": "assets/icon128.png",
       "128": "assets/icon128.png"
     }
   },
@@ -36,8 +36,8 @@
     }
   ],
   "icons": {
-    "16": "assets/icon16.png",
-    "48": "assets/icon48.png",
+    "16": "assets/icon128.png",
+    "48": "assets/icon128.png",
     "128": "assets/icon128.png"
   },
   "web_accessible_resources": [

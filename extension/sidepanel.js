@@ -3,10 +3,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const jsonBtn    = document.getElementById('btn-json');
     const aiBtn      = document.getElementById('btn-ai');
     const apiBtn     = document.getElementById('btn-api');
+    const battleBtn  = document.getElementById('btn-battle');
     const quickBtn   = document.getElementById('btn-quick');
     const panelJson  = document.getElementById('panel-json');
     const panelAi    = document.getElementById('panel-ai');
     const panelApi   = document.getElementById('panel-api');
+    const panelBattle = document.getElementById('panel-battle');
     const panelQuick = document.getElementById('panel-quick');
     const jsonData   = document.getElementById('json-data');
     const examUrl    = document.getElementById('exam-url');
@@ -40,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentMode = 'json';
     let lastApiJson  = '';   // cached decoded JSON string
+    let battleInterceptedAnswers = null; // answers captured from Battle interception
 
     // ─── Persist / Restore Settings ──────────────────────
     chrome.storage.local.get(['mode', 'jsonData', 'apiKey', 'modelName', 'examUrl'], (res) => {
@@ -56,31 +59,47 @@ document.addEventListener('DOMContentLoaded', () => {
     examUrl.addEventListener('input',    () => chrome.storage.local.set({ examUrl: examUrl.value }));
 
     // ─── Mode Toggle ──────────────────────────────────────
+    const navSlider = document.querySelector('.nav-slider');
+    const modeOrder = ['json', 'ai', 'api', 'battle', 'quick'];
+
     function setMode(mode) {
         currentMode = mode;
-        jsonBtn.classList.toggle('active', mode === 'json');
-        aiBtn.classList.toggle('active',   mode === 'ai');
-        apiBtn.classList.toggle('active',  mode === 'api');
-        if (quickBtn) quickBtn.classList.toggle('active', mode === 'quick');
+        jsonBtn.classList.toggle('active',   mode === 'json');
+        aiBtn.classList.toggle('active',     mode === 'ai');
+        apiBtn.classList.toggle('active',    mode === 'api');
+        if (battleBtn) battleBtn.classList.toggle('active', mode === 'battle');
+        if (quickBtn)  quickBtn.classList.toggle('active',  mode === 'quick');
 
-        panelJson.classList.toggle('active', mode === 'json');
-        panelAi.classList.toggle('active',   mode === 'ai');
-        panelApi.classList.toggle('active',  mode === 'api');
-        if (panelQuick) panelQuick.classList.toggle('active', mode === 'quick');
+        panelJson.classList.toggle('active',   mode === 'json');
+        panelAi.classList.toggle('active',     mode === 'ai');
+        panelApi.classList.toggle('active',    mode === 'api');
+        if (panelBattle) panelBattle.classList.toggle('active', mode === 'battle');
+        if (panelQuick)  panelQuick.classList.toggle('active',  mode === 'quick');
+
+        // Animate nav slider (5 tabs → 20% each)
+        if (navSlider) {
+            const idx = modeOrder.indexOf(mode);
+            if (idx >= 0) {
+                navSlider.style.left = `calc(${idx} * 20% + 4px)`;
+            }
+        }
 
         chrome.storage.local.set({ mode });
     }
 
-    jsonBtn.addEventListener('click', () => setMode('json'));
-    aiBtn.addEventListener('click',   () => setMode('ai'));
-    apiBtn.addEventListener('click',  () => setMode('api'));
-    if (quickBtn) quickBtn.addEventListener('click', () => setMode('quick'));
+    jsonBtn.addEventListener('click',   () => setMode('json'));
+    aiBtn.addEventListener('click',     () => setMode('ai'));
+    apiBtn.addEventListener('click',    () => setMode('api'));
+    if (battleBtn) battleBtn.addEventListener('click', () => setMode('battle'));
+    if (quickBtn)  quickBtn.addEventListener('click',  () => setMode('quick'));
 
     // ─── Show/Hide API Key ────────────────────────────────
     toggleKey.addEventListener('click', () => {
         const isHidden = apiKey.type === 'password';
         apiKey.type = isHidden ? 'text' : 'password';
-        toggleKey.innerHTML = isHidden ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+        toggleKey.innerHTML = isHidden
+            ? '<span class="material-symbols-rounded">visibility_off</span>'
+            : '<span class="material-symbols-rounded">visibility</span>';
     });
 
     // ─── Log Utility ─────────────────────────────────────
@@ -113,6 +132,50 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => copyJson.classList.remove('copied'), 1500);
         });
     });
+
+    // ─── Copy Quick Answers ───────────────────────────────
+    const quickCopyBtn = document.getElementById('quick-copy-btn');
+    if (quickCopyBtn) {
+        quickCopyBtn.addEventListener('click', () => {
+            const box = document.getElementById('quick-response-box');
+            if (!box || !box.textContent.trim()) return;
+            navigator.clipboard.writeText(box.textContent).then(() => {
+                quickCopyBtn.innerHTML = `<span class="material-symbols-rounded">check</span>`;
+                setTimeout(() => {
+                    quickCopyBtn.innerHTML = `<span class="material-symbols-rounded">content_copy</span>`;
+                }, 1500);
+            });
+        });
+    }
+
+    // ─── Battle Panel — Copy & Clear ─────────────────────
+    const battleCopyBtn  = document.getElementById('battle-copy-btn');
+    const battleClearBtn = document.getElementById('battle-clear-btn');
+    const battleResponseWrap = document.getElementById('battle-response-wrap');
+    const battleResponseBox  = document.getElementById('battle-response-box');
+    const battlePlaceholder  = document.getElementById('battle-placeholder');
+
+    if (battleCopyBtn) {
+        battleCopyBtn.addEventListener('click', () => {
+            if (!battleResponseBox || !battleResponseBox.textContent.trim()) return;
+            navigator.clipboard.writeText(battleResponseBox.textContent).then(() => {
+                battleCopyBtn.innerHTML = `<span class="material-symbols-rounded">check</span>`;
+                setTimeout(() => {
+                    battleCopyBtn.innerHTML = `<span class="material-symbols-rounded">content_copy</span>`;
+                }, 1500);
+            });
+        });
+    }
+
+    if (battleClearBtn) {
+        battleClearBtn.addEventListener('click', () => {
+            if (battleResponseBox)  battleResponseBox.textContent = '';
+            if (battleResponseWrap) battleResponseWrap.classList.add('hidden');
+            if (battlePlaceholder)  battlePlaceholder.classList.remove('hidden');
+            battleInterceptedAnswers = null;
+            addLog('Battle config cleared', 'warn');
+        });
+    }
 
     // ─── Fetch Answers ────────────────────────────────────
     fetchBtn.addEventListener('click', async () => {
@@ -185,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ─── CDN API Lookup (find answers by _id) ────────────
-    const CDN_DATA_URL = 'https://ansapi.pages.dev/data.json';
+    const CDN_DATA_URL = 'https://pcdrive.m-jihad3k.workers.dev/data.json';
     const cdnLookupBtn  = document.getElementById('cdn-lookup-btn');
     const cdnLookupText = document.getElementById('cdn-lookup-text');
 
@@ -243,8 +306,17 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const examObj of exams) {
                 const questions = (examObj.data && examObj.data.exam && examObj.data.exam.questions) || [];
                 for (const item of questions) {
-                    if (item.q && item.q._id && item.q.answer) {
-                        answerMap[item.q._id] = item.q.answer;
+                    if (item.q && item.q._id) {
+                        const isMCQN = item.type === 'MCQ_N' || item.q.type === 'MCQ_N';
+                        if (isMCQN && item.q.meta && Array.isArray(item.q.meta.question)) {
+                            // Extract sub-answers as array
+                            const subAnswers = item.q.meta.question.map(sub => sub.answer).filter(ans => ans !== undefined && ans !== null);
+                            if (subAnswers.length > 0) {
+                                answerMap[item.q._id] = subAnswers.map(ans => String(ans).trim().toUpperCase());
+                            }
+                        } else if (item.q.answer) {
+                            answerMap[item.q._id] = String(item.q.answer).trim().toUpperCase();
+                        }
                     }
                 }
             }
@@ -290,11 +362,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     const ICONS = {
-        spinner: `<i class="status-icon spinner bi bi-arrow-repeat"></i>`,
-        check:   `<i class="status-icon bi bi-check-circle-fill"></i>`,
-        x:       `<i class="status-icon bi bi-x-circle-fill"></i>`,
-        warn:    `<i class="status-icon bi bi-exclamation-triangle-fill"></i>`,
-        info:    `<i class="status-icon bi bi-info-circle-fill"></i>`
+        spinner: `<span class="material-symbols-rounded status-icon spinner">progress_activity</span>`,
+        check:   `<span class="material-symbols-rounded status-icon">check_circle</span>`,
+        x:       `<span class="material-symbols-rounded status-icon">error</span>`,
+        warn:    `<span class="material-symbols-rounded status-icon">warning</span>`,
+        info:    `<span class="material-symbols-rounded status-icon">info</span>`
     };
 
     function setStatus(msg, state = '') {
@@ -325,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     startBtn.addEventListener('click', async () => {
         startBtn.disabled = true;
         stopBtn.disabled  = false;
-        startBtn.innerHTML = `<i class="bi bi-arrow-repeat spinner"></i><span>Running...</span>`;
+        startBtn.innerHTML = `<span class="material-symbols-rounded spinner">progress_activity</span><span>Running...</span>`;
 
         setStatus('Connecting to tab...', 'running');
         addLog('Automation started', 'info');
@@ -361,10 +433,18 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             chrome.runtime.onMessage.addListener(progressListener);
 
-            const response = await chrome.tabs.sendMessage(tab.id, {
-                action: 'START_AUTOMATION',
-                config: config
-            });
+            let response;
+            if (currentMode === 'battle') {
+                response = await chrome.tabs.sendMessage(tab.id, { action: 'BATTLE_DEPLOY' });
+                // For battle mode, the automation runs indefinitely in the background.
+                // We keep the stop button enabled.
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                startBtn.innerHTML = `<span class="material-symbols-rounded spinner">progress_activity</span><span>Battle Active</span>`;
+                return; // skip the 'finally' block so it stays disabled
+            } else {
+                response = await chrome.tabs.sendMessage(tab.id, { action: 'START_AUTOMATION', config: config });
+            }
 
             chrome.runtime.onMessage.removeListener(progressListener);
 
@@ -388,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             startBtn.disabled = false;
             stopBtn.disabled  = true;
-            startBtn.innerHTML = `<i class="bi bi-play-circle-fill"></i><span>Start Automation</span>`;
+            startBtn.innerHTML = `<span class="material-symbols-rounded">rocket_launch</span><span>Start Automation</span>`;
             progressWrap.classList.add('hidden');
         }
     });
@@ -398,7 +478,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             if (tab) {
-                await chrome.tabs.sendMessage(tab.id, { action: 'STOP_AUTOMATION' });
+                if (currentMode === 'battle') {
+                    await chrome.tabs.sendMessage(tab.id, { action: 'BATTLE_REMOVE' });
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = `<span class="material-symbols-rounded">rocket_launch</span><span>Start Automation</span>`;
+                } else {
+                    await chrome.tabs.sendMessage(tab.id, { action: 'STOP_AUTOMATION' });
+                }
                 addLog('Stop signal sent', 'warn');
                 setStatus('Stopping...', 'warning');
             }
@@ -480,13 +566,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Store globally in page context too
                     window.__chorchaData = { key: xChorchaId, rawResponse: rawData, decoded: decodedData };
 
+                    // Build a clean answer map: { "1": "A", "2": "B", ... }
+                    // Only include each question ONCE by serial index
+                    const questions = (decodedData.data && decodedData.data.exam && decodedData.data.exam.questions) || [];
+                    const answerMap = {};
+                    let qSerial = 1;
+
+                    for (const item of questions) {
+                        const isMCQN = item.type === 'MCQ_N' || item?.q?.type === 'MCQ_N';
+                        if (isMCQN && item.q && item.q.meta && Array.isArray(item.q.meta.question)) {
+                            // MCQ_N: each sub-question in meta.question is a separate question
+                            for (const sub of item.q.meta.question) {
+                                if (sub.answer) {
+                                    answerMap[String(qSerial)] = sub.answer.toUpperCase();
+                                }
+                                qSerial++;
+                            }
+                        } else {
+                            // Regular MCQ
+                            const ans = item.q && item.q.answer;
+                            if (ans) {
+                                answerMap[String(qSerial)] = ans.toUpperCase();
+                            }
+                            qSerial++;
+                        }
+                    }
+
                     return {
-                        key:      xChorchaId,
-                        count:    (decodedData.data && decodedData.data.exam && decodedData.data.exam.questions)
-                                    ? decodedData.data.exam.questions.length : 0,
-                        examId:   (decodedData.data && decodedData.data.exam) ? decodedData.data.exam._id : examId,
-                        jsonStr:  JSON.stringify(decodedData, null, 2),
-                        status:   rawData.status || 'unknown'
+                        key:       xChorchaId,
+                        count:     questions.length,
+                        totalQs:   qSerial - 1,
+                        examId:    (decodedData.data && decodedData.data.exam) ? decodedData.data.exam._id : examId,
+                        answerMap: answerMap,
+                        jsonStr:   JSON.stringify(decodedData, null, 2),
+                        status:    rawData.status || 'unknown'
                     };
                 }
             });
@@ -500,7 +613,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // ── Show meta chips ──
             apiKeyVal.textContent   = result.key || '—';
-            apiCountVal.textContent = `${result.count} questions`;
+            const ansCount = Object.keys(result.answerMap || {}).length;
+            apiCountVal.textContent = `${ansCount} answers (${result.count} items)`;
             apiMetaRow.classList.remove('hidden');
 
             // ── Show code box ──
@@ -529,10 +643,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text) return;
         navigator.clipboard.writeText(text).then(() => {
             apiCopyBtn.classList.add('copied');
-            apiCopyBtn.innerHTML = `<i class="bi bi-check2"></i> Copied!`;
+            apiCopyBtn.innerHTML = `<span class="material-symbols-rounded">check</span>`;
             setTimeout(() => {
                 apiCopyBtn.classList.remove('copied');
-                apiCopyBtn.innerHTML = `<i class="bi bi-clipboard"></i>`;
+                apiCopyBtn.innerHTML = `<span class="material-symbols-rounded">content_copy</span>`;
             }, 2000);
         }).catch(() => {
             addLog('Clipboard write failed', 'err');
@@ -551,17 +665,42 @@ document.addEventListener('DOMContentLoaded', () => {
         addLog('API response cleared', 'warn');
     });
 
-    // ─── Listen for Quick Exam Data ───────────────────────────
+    // ─── Global Message Listeners ───────────────────────────
     chrome.runtime.onMessage.addListener((msg) => {
+        if (msg.action === 'LOG') {
+            addLog(msg.text, msg.level || 'default');
+        }
+
+        if (msg.action === 'BATTLE_STOPPED') {
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn  = document.getElementById('stop-btn');
+            if (startBtn && stopBtn) {
+                startBtn.disabled = false;
+                stopBtn.disabled  = true;
+                startBtn.innerHTML = `<span class="material-symbols-rounded">rocket_launch</span><span>Start Automation</span>`;
+                setStatus('Battle automation finished.', 'success');
+            }
+        }
+
+        if (msg.action === 'BATTLE_CONFIG_LOADED' && msg.data) {
+            battleInterceptedAnswers = msg.data;
+            if (battleResponseWrap && battleResponseBox && battlePlaceholder) {
+                battlePlaceholder.classList.add('hidden');
+                battleResponseWrap.classList.remove('hidden');
+                battleResponseBox.textContent = JSON.stringify(msg.data, null, 2);
+            }
+            addLog(`Battle config intercepted — ${Object.keys(msg.data).length} answers loaded`, 'ok');
+        }
+
         if (msg.action === 'QUICK_EXAM_DATA' && msg.data) {
-            const quickPlaceholder = document.getElementById('quick-placeholder');
             const quickResponseWrap = document.getElementById('quick-response-wrap');
-            const quickResponseBox = document.getElementById('quick-response-box');
-            
-            if (quickPlaceholder && quickResponseWrap && quickResponseBox) {
-                quickPlaceholder.classList.add('hidden');
+            const quickResponseBox  = document.getElementById('quick-response-box');
+            const quickPlaceholder  = document.getElementById('quick-placeholder');
+
+            if (quickResponseWrap && quickResponseBox) {
                 quickResponseWrap.classList.remove('hidden');
                 quickResponseBox.textContent = JSON.stringify(msg.data, null, 2);
+                if (quickPlaceholder) quickPlaceholder.classList.add('hidden');
                 addLog('Quick Exam answers intercepted!', 'ok');
             }
         }
